@@ -8,8 +8,8 @@ type Props = {
 const items: { id: NavId; label: string; hint: string }[] = [
   { id: 'home', label: 'Overview', hint: 'Status and quick links' },
   { id: 'settings', label: 'Settings', hint: 'Configure the application' },
-  { id: 'mission', label: 'New mission', hint: 'Create from template' },
-  { id: 'managed-missions', label: 'Managed scenarios', hint: 'View all managed scenarios' },
+  { id: 'mission', label: 'New Mission', hint: 'Create from template' },
+  { id: 'managed-missions', label: 'Managed Missions', hint: 'View all managed missions' },
 ]
 
 export function Sidebar({ active, onSelect }: Props) {

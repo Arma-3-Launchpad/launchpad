@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  deleteManagedScenario,
   fetchManagedScenarios,
   updateManagedScenario,
   type ManagedScenario,
@@ -60,22 +61,31 @@ export function MissionListPage() {
   }
 
   async function runPboBuild() {
-    const proj = pboMission?.project_path?.trim()
-    if (!proj) return
+    const mission = pboMission
+    const proj = mission?.project_path?.trim()
+    if (!mission || !proj) return
     setPboBusy(true)
     setPboErr(null)
     setPboLogLines([])
     setPboResultPath(null)
     try {
-      await Util.buildMissionPBOStream(proj, pboOutDir.trim() || undefined, (ev) => {
-        if (ev.type === 'log') {
-          setPboLogLines((prev) => [...prev, ev.message])
-        } else if (ev.type === 'error') {
-          setPboErr(ev.message)
-        } else if (ev.type === 'done') {
-          setPboResultPath(ev.pboPath)
-        }
-      })
+      await Util.buildMissionPBOStream(
+        proj,
+        pboOutDir.trim() || undefined,
+        (ev) => {
+          if (ev.type === 'log') {
+            setPboLogLines((prev) => [...prev, ev.message])
+          } else if (ev.type === 'error') {
+            setPboErr(ev.message)
+          } else if (ev.type === 'done') {
+            setPboResultPath(ev.pboPath)
+          }
+        },
+        {
+          missionName: mission.name ?? '',
+          mapSuffix: mission.map_suffix ?? '',
+        },
+      )
     } catch (e) {
       setPboErr(e instanceof Error ? e.message : 'Build failed')
     } finally {
@@ -113,6 +123,16 @@ export function MissionListPage() {
     setEditingId(null)
     setSaveError(null)
     setSaveInfo(null)
+  }
+
+  async function deleteMission(s: ManagedScenario) {
+    try {
+      await deleteManagedScenario(s.id)
+      if (editingId === s.id) cancelEdit()
+      await load()
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Delete failed')
+    }
   }
 
   async function saveEdit() {
@@ -160,8 +180,11 @@ export function MissionListPage() {
               {fullMissionName(pboMission)}
             </p>
             <label className="field">
-              <span className="field-label" style={{ width: '100%' }}>Output folder or full .pbo path</span>
+              <span className="field-label" style={{ width: '100%' }}>
+                Output folder (optional)
+              </span>
               <input
+                type="text"
                 className="field-input"
                 name="pbo_output"
                 autoComplete="off"
@@ -171,8 +194,9 @@ export function MissionListPage() {
                 placeholder="Leave blank to place next to the mission folder"
               />
               <span className="field-hint">
-                Folder only: the file will be named like the mission folder with a .pbo extension. You
-                can also paste a full path ending in .pbo.
+                The PBO file is always <strong>{fullMissionName(pboMission)}.pbo</strong>. Leave blank to
+                write beside this mission folder, enter a folder, or paste any path ending in{' '}
+                <code>.pbo</code> (only the parent folder is used; the filename is always as above).
               </span>
             </label>
             {pboErr ? (
@@ -220,7 +244,7 @@ export function MissionListPage() {
       ) : null}
 
       <header className="page-header">
-        <h1 className="page-title">Managed scenarios</h1>
+        <h1 className="page-title">Managed Missions</h1>
       </header>
 
       {loadError && (
@@ -288,6 +312,17 @@ export function MissionListPage() {
                       <button
                         type="button"
                         className="btn btn-ghost"
+                        onClick={() => {
+                          if (!confirm('Are you sure you want to delete this mission?')) return
+                          void deleteMission(scenario)
+                        }}
+                        disabled={loading}
+                      >
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
                         onClick={() =>
                           void Util.runCommand(
                             `code ${JSON.stringify(scenario.project_path ?? '')}`,
@@ -313,6 +348,7 @@ export function MissionListPage() {
                       <label className="field">
                         <span className="field-label">Mission name</span>
                         <input
+                          type="text"
                           className="field-input"
                           name="name"
                           autoComplete="off"
@@ -324,6 +360,7 @@ export function MissionListPage() {
                       <label className="field">
                         <span className="field-label">Map suffix</span>
                         <input
+                          type="text"
                           className="field-input"
                           name="map_suffix"
                           autoComplete="off"

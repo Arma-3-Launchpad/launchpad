@@ -147,6 +147,23 @@ export async function updateManagedScenario(
   return data as UpdateManagedScenarioSuccess
 }
 
+export async function deleteManagedScenario(id: string): Promise<void> {
+  const res = await fetch(apiUrl(`/api/managed/scenarios/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) {
+    let detail = `Request failed (HTTP ${res.status})`
+    try {
+      const errBody = (await res.json()) as { error?: string }
+      if (typeof errBody.error === 'string') detail = errBody.error
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail)
+  }
+}
+
 export async function fetchSettings(): Promise<LaunchpadSettings> {
   const res = await fetch(apiUrl('/api/settings'), {
     method: 'GET',

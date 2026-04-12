@@ -182,7 +182,7 @@ export function SettingsPage() {
                 }}
               />
               <span className="field-hint">
-                Required for new missions: the folder that contains <span className="shell-inline-code">missions</span>{' '}
+                Required for new Missions: the folder that contains <span className="shell-inline-code">missions</span>{' '}
                 and <span className="shell-inline-code">mpmissions</span> (where the launcher creates the scenario
                 symlink).
               </span>

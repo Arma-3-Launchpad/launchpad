@@ -238,6 +238,59 @@ def _json_str_field(body: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
+def _project_path_resolves_same(project_resolved: str, project_path_raw: str) -> bool:
+    """True when ``project_path_raw`` resolves to the same directory as ``project_resolved``."""
+    cand = _path_under_allowed_root(project_path_raw.strip())
+    if cand is None:
+        return False
+    try:
+        a = os.path.normcase(os.path.realpath(project_resolved))
+        b = os.path.normcase(os.path.realpath(cand))
+    except OSError:
+        a = os.path.normcase(os.path.normpath(project_resolved))
+        b = os.path.normcase(os.path.normpath(cand))
+    return a == b
+
+
+def _mission_pbo_base_filename(project_resolved: str, body: dict[str, Any]) -> tuple[str | None, str | None]:
+    """
+    PBO filename is always ``{mission_name}.{map_suffix}.pbo`` when name/suffix are known
+    (from the request body or a matching managed-mission row); otherwise the mission folder name.
+    """
+    name = _json_str_field(body, "mission_name", "missionName")
+    map_suf = _json_str_field(body, "map_suffix", "mapSuffix")
+
+    def pack(n: str, m: str) -> tuple[str | None, str | None]:
+        err = _validate_mission_token(n, "Mission name")
+        if err:
+            return None, err
+        err = _validate_mission_token(m, "Map suffix")
+        if err:
+            return None, err
+        return f"{n}.{m}.pbo", None
+
+    if name and map_suf:
+        return pack(name, map_suf)
+    if name is not None or map_suf is not None:
+        return None, "Provide both mission_name and map_suffix for the PBO file name."
+
+    for _mid, row in _read_managed_missions_raw().items():
+        if not isinstance(row, dict):
+            continue
+        pp = row.get("project_path")
+        if not isinstance(pp, str) or not pp.strip():
+            continue
+        if not _project_path_resolves_same(project_resolved, pp):
+            continue
+        n = str(row.get("name", "")).strip()
+        m = str(row.get("map_suffix", "")).strip()
+        if n and m:
+            return pack(n, m)
+        break
+
+    return os.path.basename(project_resolved.rstrip(os.sep)) + ".pbo", None
+
+
 def _mission_pbo_output_parent_allowed(pbo_full: str, project_resolved: str) -> str | None:
     """
     Return ``None`` if the parent directory of ``pbo_full`` may receive the PBO.
@@ -260,13 +313,24 @@ def _mission_pbo_output_parent_allowed(pbo_full: str, project_resolved: str) -> 
     )
 
 
-def _normalize_mission_pbo_output_path(project_resolved: str, output_path: str | None) -> tuple[str | None, str | None]:
-    """``(absolute .pbo path, error)``."""
-    base_name = os.path.basename(project_resolved.rstrip(os.sep)) + ".pbo"
+def _normalize_mission_pbo_output_path(
+    project_resolved: str, output_path: str | None, pbo_filename: str
+) -> tuple[str | None, str | None]:
+    """``(absolute .pbo path, error)``. ``pbo_filename`` must be a plain ``*.pbo`` name (no directories)."""
+    if "\\" in pbo_filename or "/" in pbo_filename:
+        return None, "Invalid PBO file name."
+    if not pbo_filename.lower().endswith(".pbo"):
+        return None, "Invalid PBO file name."
+    if os.path.basename(pbo_filename) != pbo_filename:
+        return None, "Invalid PBO file name."
+    base_name = pbo_filename
     if output_path:
         raw = output_path.strip()
         out = os.path.abspath(os.path.normpath(raw))
-        full = out if out.lower().endswith(".pbo") else os.path.join(out, base_name)
+        if out.lower().endswith(".pbo"):
+            full = os.path.join(os.path.dirname(out), base_name)
+        else:
+            full = os.path.join(out, base_name)
     else:
         full = os.path.join(os.path.dirname(project_resolved), base_name)
     err = _mission_pbo_output_parent_allowed(full, project_resolved)
@@ -382,6 +446,10 @@ class A3LaunchpadAPI:
             mission_id = subpath[len("managed/scenarios/") :].strip("/")
             if mission_id and "/" not in mission_id:
                 return api.handle_managed_scenario_patch(mission_id, handler)
+        if method.upper() == "DELETE" and subpath.startswith("managed/scenarios/"):
+            mission_id = subpath[len("managed/scenarios/") :].strip("/")
+            if mission_id and "/" not in mission_id:
+                return api.handle_managed_scenario_delete(mission_id, handler)
         return None
 
     def handle_managed_scenarios_request(self, handler: BaseHTTPRequestHandler):
@@ -480,6 +548,53 @@ class A3LaunchpadAPI:
             return {"_http_status": 500, "error": f"Could not save managed missions: {e}"}
 
         out: dict[str, Any] = {"ok": True, "mission": {"id": mission_id, **row}}
+        if symlink_note is not None:
+            out["symlink_message"] = symlink_note
+        return out
+
+    def handle_managed_scenario_delete(self, mission_id: str, handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+        """Remove a mission from ``managed_missions.json`` and drop its profile symlink when safe."""
+        all_missions = _read_managed_missions_raw()
+        if mission_id not in all_missions or not isinstance(all_missions[mission_id], dict):
+            return {"_http_status": 404, "error": "Mission not found."}
+
+        row: dict[str, Any] = dict(all_missions[mission_id])
+        name = str(row.get("name", "")).strip()
+        map_suffix = str(row.get("map_suffix", "")).strip()
+        full = f"{name}.{map_suffix}"
+        symlink_note: str | None = None
+
+        project_path = row.get("project_path")
+        profile_path = row.get("profile_path")
+        if isinstance(project_path, str) and isinstance(profile_path, str):
+            pp = project_path.strip()
+            prof = profile_path.strip()
+            if pp and prof and name and map_suffix:
+                folder = _missions_folder_for_type(str(row.get("mission_type", "mp")))
+                link = os.path.join(prof, folder, full)
+                if os.path.lexists(link) and os.path.islink(link):
+                    try:
+                        if os.path.samefile(link, pp):
+                            os.remove(link)
+                            symlink_note = "Removed profile symlink."
+                        else:
+                            symlink_note = (
+                                "Symlink at profile path does not point to this mission; left unchanged."
+                            )
+                    except OSError as e:
+                        return {"_http_status": 500, "error": f"Could not remove symlink: {e}"}
+                elif os.path.lexists(link):
+                    symlink_note = "Profile path exists but is not a symlink; left unchanged."
+                else:
+                    symlink_note = "No symlink at profile path to remove."
+
+        del all_missions[mission_id]
+        try:
+            _write_json_atomic(_managed_missions_path(), all_missions)
+        except OSError as e:
+            return {"_http_status": 500, "error": f"Could not save managed missions: {e}"}
+
+        out: dict[str, Any] = {"ok": True}
         if symlink_note is not None:
             out["symlink_message"] = symlink_note
         return out
@@ -667,7 +782,10 @@ class A3LaunchpadAPI:
         cmd = body.get("command")
         if not isinstance(cmd, str) or not cmd.strip():
             return {"_http_status": 400, "error": "Missing or invalid command."}
-        parts = shlex.split(cmd.strip(), posix=os.name != "nt")
+        # POSIX mode so a client-built ``code "D:\\path\\with spaces"`` (JSON.stringify) parses
+        # to ``['code', r'D:\path\with spaces']``. Windows non-POSIX shlex leaves ``"`` on the path
+        # and breaks :func:`_path_under_allowed_root`.
+        parts = shlex.split(cmd.strip(), posix=True)
         if len(parts) != 2:
             return {
                 "_http_status": 403,
@@ -745,7 +863,10 @@ class A3LaunchpadAPI:
             }
 
         output_field = _json_str_field(body, "output_path", "outputPath")
-        pbo_full, out_err = _normalize_mission_pbo_output_path(project_resolved, output_field)
+        pbo_fn, fn_err = _mission_pbo_base_filename(project_resolved, body)
+        if fn_err is not None or pbo_fn is None:
+            return {"_http_status": 400, "error": fn_err or "Could not determine PBO file name."}
+        pbo_full, out_err = _normalize_mission_pbo_output_path(project_resolved, output_field, pbo_fn)
         if out_err is not None or pbo_full is None:
             return {"_http_status": 400, "error": out_err or "Invalid output path."}
 

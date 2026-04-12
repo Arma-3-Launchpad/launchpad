@@ -68,7 +68,7 @@ config_path = os.path.join(_bundle_root(), "config.json")
 def _add_cors_headers(handler: BaseHTTPRequestHandler) -> None:
     """Allow cross-origin /api calls (e.g. Vite dev server proxying to this host)."""
     handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
     handler.send_header("Access-Control-Allow-Headers", "Accept, Content-Type")
 
 def respond_with_json(handler: BaseHTTPRequestHandler, data, status: int = 200):
@@ -181,6 +181,23 @@ def make_request_handler(api: A3LaunchpadAPI, dist_dir: str):
                 self.wfile.write(b"Not found")
                 return
             payload = A3LaunchpadAPI.dispatch(api, "PATCH", self)
+            if payload is None:
+                respond_with_json(self, {"error": "Not found"}, status=404)
+                return
+            status = 200
+            if isinstance(payload, dict) and "_http_status" in payload:
+                status = int(payload["_http_status"])
+                payload = {k: v for k, v in payload.items() if k != "_http_status"}
+            respond_with_json(self, payload, status=status)
+
+        def do_DELETE(self):
+            if not self.path.split("?", 1)[0].startswith("/api/"):
+                self.send_response(404)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(b"Not found")
+                return
+            payload = A3LaunchpadAPI.dispatch(api, "DELETE", self)
             if payload is None:
                 respond_with_json(self, {"error": "Not found"}, status=404)
                 return

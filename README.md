@@ -24,7 +24,7 @@ You are ready to start creating!
 
 Launch the suite by running `python3 path/to/launchpad`, if it isn't already launched.
 
-In the main menu, select "Managed Scenarios".
+In the main menu, select "Managed Missions".
 
 Select your scenario.
 
@@ -34,7 +34,7 @@ You can change settings and macros in the main view; and edit files in your file
 
 Launch the suite by running `python3 path/to/launchpad`, if it isn't already launched.
 
-In the main menu, select "Managed Scenarios".
+In the main menu, select "Managed Missions".
 
 Select your scenario.
 
@@ -48,7 +48,7 @@ If successful, you should see the version control section populate.
 
 Launch the suite by running `python3 path/to/launchpad`, if it isn't already launched.
 
-In the main menu, select "Managed Scenarios".
+In the main menu, select "Managed Missions".
 
 Select your scenario.
 

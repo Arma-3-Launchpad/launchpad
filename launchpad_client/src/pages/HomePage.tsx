@@ -62,13 +62,13 @@ export function HomePage({ onGoMission, onGoSettings }: Props) {
 
       <section className="card" aria-labelledby="next-heading">
         <h2 id="next-heading" className="card-title">
-          Step 2: Create a new mission
+          Step 2: Create a new Mission
         </h2>
         <p className="card-body">
           Open the mission builder, fill in the basics, and seamlessly bootstrap your next project.
         </p>
         <button type="button" className="btn btn-primary" onClick={onGoMission}>
-          New mission
+          New Mission
         </button>
       </section>      
     </div>

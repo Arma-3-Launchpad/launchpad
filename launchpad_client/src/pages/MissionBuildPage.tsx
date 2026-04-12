@@ -136,7 +136,7 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
   return (
     <div className="page-stack">
       <header className="page-header">
-        <h1 className="page-title">New mission</h1>
+        <h1 className="page-title">New Mission</h1>
         <p className="page-lead">
           Fill in the details below to create a new mission.
         </p>

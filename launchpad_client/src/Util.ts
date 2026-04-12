@@ -71,15 +71,26 @@ class Util {
   }
 
   /** One-shot build; returns JSON (no streaming). */
-  static async buildMissionPBO(projectPath: string, outputPath?: string): Promise<BuildPboResult> {
+  static async buildMissionPBO(
+    projectPath: string,
+    outputPath?: string,
+    missionIdentity?: { missionName: string; mapSuffix: string },
+  ): Promise<BuildPboResult> {
+    const body: Record<string, unknown> = {
+      project_path: projectPath,
+      output_path: outputPath?.trim() ?? '',
+      stream: false,
+    }
+    const n = missionIdentity?.missionName?.trim()
+    const m = missionIdentity?.mapSuffix?.trim()
+    if (n && m) {
+      body.mission_name = n
+      body.map_suffix = m
+    }
     const response = await fetch(apiUrl('/api/build-mission-pbo'), {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({
-        project_path: projectPath,
-        output_path: outputPath?.trim() ?? '',
-        stream: false,
-      }),
+      body: JSON.stringify(body),
     })
     const data = (await response.json().catch(() => ({}))) as BuildPboResult & {
       error?: string
@@ -97,15 +108,23 @@ class Util {
     projectPath: string,
     outputPath: string | undefined,
     onEvent: (ev: BuildPboStreamEvent) => void,
+    missionIdentity?: { missionName: string; mapSuffix: string },
   ): Promise<void> {
+    const body: Record<string, unknown> = {
+      project_path: projectPath,
+      output_path: outputPath?.trim() ?? '',
+      stream: true,
+    }
+    const n = missionIdentity?.missionName?.trim()
+    const m = missionIdentity?.mapSuffix?.trim()
+    if (n && m) {
+      body.mission_name = n
+      body.map_suffix = m
+    }
     const response = await fetch(apiUrl('/api/build-mission-pbo'), {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({
-        project_path: projectPath,
-        output_path: outputPath?.trim() ?? '',
-        stream: true,
-      }),
+      body: JSON.stringify(body),
     })
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText)
