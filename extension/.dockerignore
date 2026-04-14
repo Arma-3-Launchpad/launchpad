@@ -1,0 +1,34 @@
+# Build outputs
+out/
+*.so
+*.a
+*.o
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+
+# CMake cache
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md

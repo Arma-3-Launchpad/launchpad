@@ -25,6 +25,28 @@ def make_mission_pbo(
     are passed via ``files=[mission_folder]`` so the tree is included.
     """
     src = os.path.realpath(os.path.normpath(mission_folder))
+    
+    # build list of files to include in the PBO
+    files = []
+    # ignore .git directory and all its contents
+    for root, dirs, _files in os.walk(src, topdown=True):
+        # Prune in-place so os.walk does not descend into VCS metadata.
+        if '.git' in dirs:
+            dirs.remove('.git')
+        if '.github' in dirs:
+            dirs.remove('.github')
+
+        # ignore .gitignore file
+        if '.gitignore' in _files:
+            _files.remove('.gitignore')
+
+        # ignore .gitattributes file
+        if '.gitattributes' in _files:
+            _files.remove('.gitattributes')
+
+        for file in _files:
+            files.append(os.path.join(root, file))
+
     out = os.path.abspath(os.path.normpath(output_pbo_path))
     parent = os.path.dirname(out)
     if not parent:
@@ -32,7 +54,7 @@ def make_mission_pbo(
     os.makedirs(parent, exist_ok=True)
     pbo(
         out,
-        files=[src],
+        files=files,
         create_pbo=True,
         update_timestamps=True,
         recursion=True,

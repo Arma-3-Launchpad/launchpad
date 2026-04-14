@@ -1,7 +1,21 @@
-import { useCallback, useEffect, useState } from 'react'
-import { deleteManagedScenario, fetchManagedScenarios, gameTypeFromExtParams, type ManagedScenario } from '../api/launchpad'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faGithub } from '@fortawesome/free-brands-svg-icons'
+import { faEdit, faArchive, faTrash, faPlay, faList } from '@fortawesome/free-solid-svg-icons'
+import {
+  deleteManagedScenario,
+  fetchManagedScenarios,
+  fetchManagedScenarioMods,
+  gameTypeFromExtParams,
+  launchManagedScenario,
+  saveManagedScenarioMods,
+  type ManagedScenario,
+  type MissionLaunchMod,
+} from '../api/launchpad'
 import { MissionEditModal } from '../components/MissionEditModal'
+import { MissionGitHubModal } from '../components/MissionGitHubModal'
 import Util, { PboOutputExistsError } from '../Util'
+import { VSCodeIcon } from '../components/CustomIcons/VSCodeIcon'
 
 function fullMissionName(s: ManagedScenario) {
   const base = (s.name ?? '').trim()
@@ -35,11 +49,18 @@ function defaultPboOutputFolder(projectPath: string | undefined): string {
   return `${root.replace(/[/\\]+$/, '')}${sep}output`
 }
 
-export function MissionListPage() {
+type MissionListPageProps = {
+  onOpenSettings?: () => void
+}
+
+export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
+  const modlistFileInputId = useId()
+  const modlistFileRef = useRef<HTMLInputElement>(null)
   const [scenarios, setScenarios] = useState<ManagedScenario[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editMission, setEditMission] = useState<ManagedScenario | null>(null)
+  const [githubMission, setGithubMission] = useState<ManagedScenario | null>(null)
   const [saveInfo, setSaveInfo] = useState<string | null>(null)
 
   const [pboMission, setPboMission] = useState<ManagedScenario | null>(null)
@@ -55,6 +76,11 @@ export function MissionListPage() {
   const [deleteRemoveDisk, setDeleteRemoveDisk] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
+  const [modsMission, setModsMission] = useState<ManagedScenario | null>(null)
+  const [modsRows, setModsRows] = useState<MissionLaunchMod[]>([])
+  const [modsBusy, setModsBusy] = useState(false)
+  const [modsErr, setModsErr] = useState<string | null>(null)
+  const [modsInfo, setModsInfo] = useState<string | null>(null)
 
   function openPboModal(s: ManagedScenario) {
     setPboMission(s)
@@ -82,6 +108,117 @@ export function MissionListPage() {
     setDeleteTarget(null)
   }
 
+  async function openModsDialog(s: ManagedScenario) {
+    setModsMission(s)
+    setModsErr(null)
+    setModsInfo(null)
+    setModsRows(Array.isArray(s.launch_mods) ? s.launch_mods : [])
+    setModsBusy(true)
+    try {
+      const rows = await fetchManagedScenarioMods(s.id)
+      setModsRows(rows)
+    } catch (e) {
+      setModsErr(e instanceof Error ? e.message : 'Could not load mission mod profile.')
+    } finally {
+      setModsBusy(false)
+    }
+  }
+
+  function closeModsDialog() {
+    if (modsBusy) return
+    setModsMission(null)
+    setModsErr(null)
+    setModsInfo(null)
+  }
+
+  async function onModsHtmlFile(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0]
+    ev.target.value = ''
+    if (!file || !modsMission) return
+    setModsBusy(true)
+    setModsErr(null)
+    setModsInfo(null)
+    try {
+      const text = await file.text()
+      const parsed = await Util.parseModlistFromHtml(file.name, text)
+      if (!parsed.mods.length) {
+        setModsInfo('No mods were recognized in that HTML file.')
+        return
+      }
+      const have = new Set(modsRows.map((m) => m.path.toLowerCase()))
+      const additions: { path: string; enabled: boolean; label: string }[] = []
+      for (const mod of parsed.mods) {
+        const link = mod.link.trim()
+        if (!link) continue
+        const key = link.toLowerCase()
+        if (!have.has(key)) {
+          have.add(key)
+          additions.push({ path: link, enabled: true, label: mod.name?.trim() ?? '' })
+        }
+      }
+      const merged = [...modsRows.map((m) => ({ ...m })), ...additions]
+      const saved = await saveManagedScenarioMods(modsMission.id, merged)
+      setModsRows(saved)
+      setScenarios((prev) => prev.map((x) => (x.id === modsMission.id ? { ...x, launch_mods: saved } : x)))
+      setModsInfo(
+        additions.length
+          ? `Imported ${additions.length} new mod(s).`
+          : 'All recognized mods were already saved for this mission.',
+      )
+    } catch (e) {
+      setModsErr(e instanceof Error ? e.message : 'Could not import mod list.')
+    } finally {
+      setModsBusy(false)
+    }
+  }
+
+  async function toggleMissionMod(id: string, enabled: boolean) {
+    if (!modsMission) return
+    setModsBusy(true)
+    setModsErr(null)
+    try {
+      const merged = modsRows.map((m) => (m.id === id ? { ...m, enabled } : m))
+      const saved = await saveManagedScenarioMods(modsMission.id, merged)
+      setModsRows(saved)
+      setScenarios((prev) => prev.map((x) => (x.id === modsMission.id ? { ...x, launch_mods: saved } : x)))
+    } catch (e) {
+      setModsErr(e instanceof Error ? e.message : 'Could not update mission mod profile.')
+    } finally {
+      setModsBusy(false)
+    }
+  }
+
+  async function clearMissionMods() {
+    if (!modsMission || modsRows.length === 0) return
+    if (!window.confirm('Clear all saved mods for this mission?')) return
+    setModsBusy(true)
+    setModsErr(null)
+    try {
+      const saved = await saveManagedScenarioMods(modsMission.id, [])
+      setModsRows(saved)
+      setScenarios((prev) => prev.map((x) => (x.id === modsMission.id ? { ...x, launch_mods: saved } : x)))
+      setModsInfo('Saved mod profile cleared for this mission.')
+    } catch (e) {
+      setModsErr(e instanceof Error ? e.message : 'Could not clear mission mod profile.')
+    } finally {
+      setModsBusy(false)
+    }
+  }
+
+  async function runMission(scenario: ManagedScenario) {
+    setSaveInfo(null)
+    const res = await launchManagedScenario(scenario.id)
+    if ('error' in res) {
+      setLoadError(res.error)
+      return
+    }
+    setLoadError(null)
+    setSaveInfo(
+      res.message ??
+        `Started Arma 3 for ${fullMissionName(scenario)}${res.modsApplied ? ` with ${res.modsApplied} mod(s)` : ''}.`,
+    )
+  }
+
   async function confirmDeleteMission() {
     if (!deleteTarget) return
     setDeleteBusy(true)
@@ -89,6 +226,7 @@ export function MissionListPage() {
     try {
       await deleteManagedScenario(deleteTarget.id, { deleteProjectFiles: deleteRemoveDisk })
       if (editMission?.id === deleteTarget.id) setEditMission(null)
+      if (githubMission?.id === deleteTarget.id) setGithubMission(null)
       await load()
       setDeleteTarget(null)
     } catch (e) {
@@ -168,6 +306,135 @@ export function MissionListPage() {
             setSaveInfo('Mission updated.')
           }}
         />
+      ) : null}
+      {githubMission ? (
+        <MissionGitHubModal
+          key={githubMission.id}
+          mission={githubMission}
+          onClose={() => setGithubMission(null)}
+          onAfterCommit={() => void load()}
+          onOpenSettings={
+            onOpenSettings
+              ? () => {
+                  setGithubMission(null)
+                  onOpenSettings()
+                }
+              : undefined
+          }
+        />
+      ) : null}
+      {modsMission ? (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="mods-modal-title">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => closeModsDialog()}
+            disabled={modsBusy}
+          />
+          <div className="modal-dialog modal-dialog-wide mission-edit-dialog">
+            <header className="mission-edit-header">
+              <div className="mission-edit-header-main">
+                <p className="mission-edit-eyebrow">Mission launch profile</p>
+                <h2 id="mods-modal-title" className="mission-edit-title">
+                  {fullMissionName(modsMission)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="mission-edit-close"
+                onClick={() => closeModsDialog()}
+                aria-label="Close"
+                disabled={modsBusy}
+              >
+                <span aria-hidden>×</span>
+              </button>
+            </header>
+
+            <div className="mission-edit-surface">
+              <div className="mission-edit-section">
+                <p className="mission-edit-lead">
+                  Save a mod profile just for this mission. Launchpad applies these enabled mods whenever this mission
+                  is started from Launchpad.
+                </p>
+                <div className="testing-toolbar" style={{ marginBottom: 8 }}>
+                  <input
+                    ref={modlistFileRef}
+                    id={modlistFileInputId}
+                    type="file"
+                    accept=".html,.htm,text/html"
+                    hidden
+                    onChange={(e) => void onModsHtmlFile(e)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={modsBusy}
+                    onClick={() => modlistFileRef.current?.click()}
+                  >
+                    Load HTML mod list…
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={modsBusy || !modsRows.length}
+                    onClick={() => void clearMissionMods()}
+                  >
+                    Clear all mods
+                  </button>
+                </div>
+                {modsInfo ? (
+                  <p className="form-banner form-banner-success" role="status">
+                    {modsInfo}
+                  </p>
+                ) : null}
+                {modsErr ? (
+                  <p className="form-banner form-banner-error" role="alert">
+                    {modsErr}
+                  </p>
+                ) : null}
+                {modsRows.length === 0 ? (
+                  <p className="card-body" style={{ color: 'var(--text-muted)' }}>
+                    No mods saved for this mission.
+                  </p>
+                ) : (
+                  <div className="testing-mod-table-wrap">
+                    <table className="testing-mod-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">On</th>
+                          <th scope="col">Name</th>
+                          <th scope="col">Link</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modsRows.map((m) => (
+                          <tr key={m.id}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={m.enabled !== false}
+                                disabled={modsBusy}
+                                onChange={(e) => void toggleMissionMod(m.id, e.target.checked)}
+                                aria-label={`Enable mod ${m.path}`}
+                              />
+                            </td>
+                            <td>
+                              {m.label?.trim() ? m.label : '—'}
+                            </td>
+                            <td>
+                              <code className="testing-mod-path">{m.path}</code>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
       {deleteTarget ? (
         <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="delete-mission-title">
@@ -421,46 +688,85 @@ export function MissionListPage() {
                     <div className="mission-list-title">{fullMissionName(scenario)}</div>
                     <div className="mission-list-meta">
                       <span>By {scenario.author}</span>
-                      <span className="mission-list-pill">{scenario.mission_type}</span>
+                      <span className="mission-list-pill">{scenario.mission_type?.toUpperCase() || '—'}</span>
                       <span className="mission-list-pill mission-list-pill-accent">
                         {gameTypeFromExtParams(scenario.ext_params).toUpperCase() || '—'}
                       </span>
                       {hasSymlinkPaths(scenario) ? (
-                        <span className="mission-list-pill mission-list-pill-on">Symlink data</span>
+                        <span className="mission-list-pill mission-list-pill-on">Symlink</span>
                       ) : (
-                        <span className="mission-list-pill">Symlink data missing</span>
+                        <span className="mission-list-pill mission-list-pill-off">Symlink missing</span>
                       )}
+                      {scenario.github_integration ? (
+                        <span className="mission-list-pill mission-list-pill-on" title="GitHub integration enabled">
+                          Git
+                        </span>
+                      ) : null}
                     </div>
                     {scenario.description ? (
                       <p className="mission-list-desc">{scenario.description}</p>
                     ) : null}
                   </div>
-                  <button type="button" className="btn btn-ghost" onClick={() => setEditMission(scenario)}>
-                    Edit
+                  <button type="button" className="btn btn-ghost" onClick={() => setEditMission(scenario)} title="Edit mission" disabled={loading}>
+                    <FontAwesomeIcon icon={faEdit} />
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => openDeleteDialog(scenario)}
                     disabled={loading}
+                    title="Delete mission from Launchpad"
                   >
-                    Delete
+                    <FontAwesomeIcon icon={faTrash} />
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => void Util.runCommand(`code ${JSON.stringify(scenario.project_path ?? '')}`)}
                     disabled={!scenario.project_path || loading}
+                    title="Open in VSCode"
                   >
-                    Open In VSCode
+                    <VSCodeIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => void openModsDialog(scenario)}
+                    disabled={loading}
+                    title="Manage Modlist"
+                  >
+                    <FontAwesomeIcon icon={faList} />
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => openPboModal(scenario)}
                     disabled={!scenario.project_path || loading}
+                    title="Build PBO"
                   >
-                    Build Mission PBO
+                    <FontAwesomeIcon icon={faArchive} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => void runMission(scenario)}
+                    disabled={loading}
+                    title="Run Mission"
+                  >
+                    <FontAwesomeIcon icon={faPlay} />
+                  </button>                  
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setGithubMission(scenario)}
+                    disabled={!scenario.project_path || loading || !scenario.github_integration}
+                    title={
+                      !scenario.github_integration
+                        ? 'Enable GitHub integration in Edit → GitHub'
+                        : 'Local git history and commits'
+                    }
+                  >
+                    <FontAwesomeIcon icon={faGithub} />
                   </button>
                 </div>
               </li>

@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Do not add overly-technical text to the web UI or text that otherwise reveals technical functionality outside the scope of the user's product needs.

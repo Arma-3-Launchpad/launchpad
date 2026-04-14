@@ -35,38 +35,36 @@ For users who prefer not to set up a development environment, a portable binary 
 
 1. Clone the repo or download it as an archive via the github website.
 
-2. Jump into the repo directory and run the install script. *This will simply attempt to make a link from your desktop to the current binary's location*
+2. Jump into the repo directory and run the install helper. *This will simply attempt to make a link from your desktop to the current binary's location*
    
    Windows
    ```bash
    cd a3-mission-launchpad
-   start install-desktop.bat
+   python package.py install-desktop
    ```
 
    Linux/MacOS
    ```bash
    cd a3-mission-launchpad
-   chmod +x install-desktop.sh
-   ./install.sh
+   python3 package.py install-desktop
    ```
 
 **Build your own executable**
 
 1. Clone the repo or download it as an archive via the github website.
 
-2. Jump into the repo directory then run the package script
+2. Jump into the repo directory then run the packaging CLI
 
    Windows
    ```bash
    cd a3-mission-launchpad
-   start package.bat
+   python package.py build
    ```
 
    Linux/MacOS
    ```bash
    cd a3-mission-launchpad
-   chmod +x package.sh
-   ./package.sh
+   python3 package.py build
    ```
    
 ---

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
+import Editor from '@monaco-editor/react'
 import { fetchMissionProjectTree, type ProjectTreeNode } from '../api/launchpad'
+import {
+  ensureMissionMonacoShiki,
+  missionMonacoTheme,
+  missionResourceLanguage,
+} from '../missionMonacoSetup'
 import Util from '../Util'
 
 function joinProjectPath(root: string, relPosix: string): string {
@@ -98,6 +104,17 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
   const [fileErr, setFileErr] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [savingFile, setSavingFile] = useState(false)
+  const [monacoReady, setMonacoReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void ensureMissionMonacoShiki().then(() => {
+      if (!cancelled) setMonacoReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const loadTree = useCallback(async () => {
     setTreeLoading(true)
@@ -207,7 +224,7 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
           {truncated ? (
             <p className="mission-resource-truncate-note">Large tree truncated for performance.</p>
           ) : null}
-          <div className="mission-resource-tree-wrap">
+          <div className="mission-resource-tree-wrap" style={{ minHeight: "80vh" }}>
             <ul className="mission-tree-list mission-tree-root">
               <TreeBranch
                 node={tree}
@@ -247,23 +264,36 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
                   {fileErr}
                 </p>
               ) : null}
-              {fileLoading ? (
+              {fileLoading || !monacoReady ? (
                 <div className="mission-resource-loading mission-resource-loading-inline">
                   <div className="mission-resource-loading-bar" />
-                  <p className="mission-resource-loading-text">Loading file…</p>
+                  <p className="mission-resource-loading-text">
+                    {!monacoReady ? 'Preparing editor…' : 'Loading file…'}
+                  </p>
                 </div>
               ) : (
-                <textarea
-                  className="mission-resource-file-editor"
-                  value={fileContent}
-                  onChange={(ev) => {
-                    setFileContent(ev.target.value)
-                    setDirty(true)
-                  }}
-                  disabled={disabled || fileLoading}
-                  spellCheck={false}
-                  aria-label="File contents"
-                />
+                <div className="mission-resource-monaco" role="textbox" aria-label="File contents" aria-multiline>
+                  <Editor
+                    height="100%"
+                    theme={missionMonacoTheme}
+                    language={missionResourceLanguage(selectedRel)}
+                    value={fileContent}
+                    onChange={(v) => {
+                      setFileContent(v ?? '')
+                      setDirty(true)
+                    }}
+                    options={{
+                      readOnly: Boolean(disabled),
+                      minimap: { enabled: false },
+                      fontSize: 12,
+                      fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                      wordWrap: 'on',
+                      tabSize: 2,
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
               )}
             </div>
           )}

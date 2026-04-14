@@ -4,7 +4,7 @@
     {
       "label": "Build client and run Launchpad",
       "type": "shell",
-      "command": "npm run build && cd .. && cmd /c package.bat && cd bin/A3MissionLaunchpad && start A3MissionLaunchpad.exe",
+      "command": "npm run build && cd .. && cmd /c package.bat && cd bin && start A3MissionLaunchpad.exe",
       "options": {
         "cwd": "${workspaceFolder}/launchpad_client"
       },

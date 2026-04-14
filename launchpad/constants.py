@@ -86,7 +86,7 @@ class Constants:
         "onLoadName": "\"$onLoadName\"",
         "briefingName": "\"$briefingName\"",
         "loadScreen": "\"$loadScreen\"",
-        "cba_settings_hasSettingsFile": 1,
+        "cba_settings_hasSettingsFile": 0,
         "saving": 0,
         "taskManagement_markers3D": 1,
         "allowSubordinatesTakeWeapons": 1,
@@ -173,7 +173,7 @@ class ScenarioData
         "onLoadName": "$onLoadName",
         "briefingName": "$briefingName",
         "loadScreen": "$loadScreen",
-        "cba_settings_hasSettingsFile": 1,
+        "cba_settings_hasSettingsFile": 0,
         "saving": 0,
         "taskManagement_markers3D": 1,
         "allowSubordinatesTakeWeapons": 1,
@@ -214,5 +214,7 @@ class ScenarioData
             120,
             60
         ]
-    }
+    },
+    "github_integration": False,
+    "launch_mods": [],
 }

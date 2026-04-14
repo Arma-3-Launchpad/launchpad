@@ -17,13 +17,14 @@ export type MissionEditModalProps = {
   onMissionUpdated: (m: ManagedScenario) => void
 }
 
-type EditSection = 'identity' | 'ext' | 'resources'
+type EditSection = 'identity' | 'ext' | 'github' | 'resources'
 
 export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }: MissionEditModalProps) {
   const [section, setSection] = useState<EditSection>('identity')
   const [editName, setEditName] = useState(mission.name ?? '')
   const [editMapSuffix, setEditMapSuffix] = useState(mission.map_suffix ?? '')
   const [editExtJson, setEditExtJson] = useState(() => stringifyExt(mission.ext_params))
+  const [editGithubIntegration, setEditGithubIntegration] = useState(Boolean(mission.github_integration))
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -31,6 +32,7 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
     setEditName(mission.name ?? '')
     setEditMapSuffix(mission.map_suffix ?? '')
     setEditExtJson(stringifyExt(mission.ext_params))
+    setEditGithubIntegration(Boolean(mission.github_integration))
     setSaveError(null)
   }, [mission])
 
@@ -53,6 +55,7 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
         name: editName.trim(),
         map_suffix: editMapSuffix.trim(),
         ext_params: extParsed,
+        github_integration: editGithubIntegration,
       })
       if ('error' in res && res.error) {
         setSaveError(res.error)
@@ -67,7 +70,7 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
     } finally {
       setSaving(false)
     }
-  }, [mission.id, editName, editMapSuffix, editExtJson, onMissionUpdated, onSaved])
+  }, [mission.id, editName, editMapSuffix, editExtJson, editGithubIntegration, onMissionUpdated, onSaved])
 
   const projectPath = mission.project_path?.trim()
 
@@ -118,6 +121,15 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
             onClick={() => setSection('ext')}
           >
             EXT params
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={section === 'github'}
+            className={`mission-edit-nav-btn${section === 'github' ? ' is-active' : ''}`}
+            onClick={() => setSection('github')}
+          >
+            GitHub
           </button>
           <button
             type="button"
@@ -178,6 +190,7 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
             <div className="mission-edit-section">
               <p className="mission-edit-lead">
                 Arbitrary JSON stored on the mission record for tooling or templates. Invalid JSON cannot be saved.
+                See <a href="https://community.bistudio.com/wiki/Description.ext" target="_blank" rel="noopener noreferrer">Description.ext</a> for more information.
               </p>
               <label className="field mission-edit-field-grow">
                 <span className="field-label">ext_params</span>
@@ -189,6 +202,26 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
                   spellCheck={false}
                   aria-label="Extension parameters as JSON"
                 />
+              </label>
+            </div>
+          )}
+
+          {section === 'github' && (
+            <div className="mission-edit-section mission-edit-section-identity">
+              <p className="mission-edit-lead">
+                When enabled, the <strong>GitHub</strong> button on the mission list opens a simple panel for recent
+                commits and local commits. Your project folder should be a Git repository (
+                <code className="mission-edit-code">git init</code> or clone). This does not configure remotes or
+                GitHub authentication; it runs local <code className="mission-edit-code">git</code> only.
+              </p>
+              <label className="modal-checkbox-field mission-edit-github-check">
+                <input
+                  type="checkbox"
+                  checked={editGithubIntegration}
+                  onChange={(ev) => setEditGithubIntegration(ev.target.checked)}
+                  disabled={saving}
+                />
+                <span>Enable GitHub integration for this mission</span>
               </label>
             </div>
           )}

@@ -31,6 +31,20 @@ def _launchpad_data_dir() -> str:
     return os.path.join(os.path.dirname(here), "launchpad_data")
 
 
+def _cba_settings_has_settings_file(description_ext_params: dict[str, Any] | None) -> bool:
+    """True when ``Description.ext`` will set ``cba_settings_hasSettingsFile = 1`` (CBA expects ``cba_settings.sqf``)."""
+    if not description_ext_params:
+        return False
+    v = description_ext_params.get("cba_settings_hasSettingsFile")
+    if v is True:
+        return True
+    if isinstance(v, (int, float)) and int(v) == 1:
+        return True
+    if isinstance(v, str) and v.strip().lower() in ("1", "true", "yes"):
+        return True
+    return False
+
+
 def _coerce_mission_type(value: Any) -> MissionType:
     if isinstance(value, MissionType):
         return value
@@ -98,6 +112,34 @@ def _sqf_event_params_prefix(meta: dict[str, Any], script_name: str) -> str:
 def forge_simple_class(class_name: str, class_content: dict) -> str:
     return f"class {class_name} {{\n{'\n'.join([f'    {key} = {value}' for key, value in class_content.items()])}\n}}\n\n"
 
+# Symlink lives at ``{profile}/missions|mpmissions/A3Launchpad_missions/{mission_name}.{map_suffix}``.
+PROFILE_MISSION_SYMLINK_SUBDIR = "A3Launchpad_missions"
+
+
+def profile_mission_symlink_path(profile_path: str, mission_type: Any, mission_fullname: str) -> str:
+    """
+    Absolute path to the Arma profile symlink for a mission folder name
+    (``mission_fullname`` is ``{mission_name}.{map_suffix}``, e.g. ``my_mission.Altis``).
+    """
+    mt = _coerce_mission_type(mission_type)
+    folder = "missions" if mt == MissionType.SP else "mpmissions"
+    prof = (profile_path or "").strip()
+    return os.path.join(prof, folder, PROFILE_MISSION_SYMLINK_SUBDIR, mission_fullname)
+
+
+def iter_profile_mission_symlink_candidates(profile_path: str, mission_type: Any, mission_fullname: str) -> list[str]:
+    """
+    Paths to check for an existing symlink: current nested layout, then legacy
+    ``{profile}/missions|mpmissions/{mission_fullname}``.
+    """
+    primary = profile_mission_symlink_path(profile_path, mission_type, mission_fullname)
+    mt = _coerce_mission_type(mission_type)
+    folder = "missions" if mt == MissionType.SP else "mpmissions"
+    prof = (profile_path or "").strip()
+    legacy = os.path.join(prof, folder, mission_fullname)
+    return [primary, legacy] if primary != legacy else [primary]
+
+
 # Bootstraps a mission by creating a project folder and symlinking the scenario link file to it.
 def bootstrap_mission(
     project_path: str,  # the path to the project folder; This can be ANYWHERE on your system. This is where the managed mission file will live.
@@ -115,16 +157,22 @@ def bootstrap_mission(
 
     prof = (profile_path or "").strip()
     if not prof:
-        msg = "No Arma profile path configured; skipped symlink under missions/mpmissions. Set arma3_profile_path in launchpad_data/settings.json."
+        msg = (
+            "No Arma profile path configured; skipped symlink under "
+            "missions|mpmissions/A3Launchpad_missions. Set arma3_profile_path in launchpad_data/settings.json."
+        )
         logging.warning(msg)
         warnings.append(msg)
         return warnings
 
-    scenario_link_path = os.path.join(
-        prof,
-        "missions" if mission_type == MissionType.SP else "mpmissions",
-        mission_fullname,
-    )
+    scenario_link_path = profile_mission_symlink_path(prof, mission_type, mission_fullname)
+    try:
+        os.makedirs(os.path.dirname(scenario_link_path), exist_ok=True)
+    except OSError as e:
+        msg = f"Could not create profile symlink parent folder ({e!r}). Mission files were still created under {project_path}."
+        logging.warning(msg)
+        warnings.append(msg)
+        return warnings
     logging.info("Creating symlink at %s -> %s", scenario_link_path, project_path)
     try:
         os.symlink(
@@ -175,12 +223,46 @@ def generate_description_ext(project_path: str, params = None) -> str:
 
     return os.path.join(project_path, "Description.ext")
 
+def generate_functions_library(project_path: str):
+    functions_path = os.path.join(project_path, "functions")
+    example_lib = os.path.join(functions_path, "example_library")
+    os.makedirs(example_lib, exist_ok=True)
+    # Create /functions/example_library/fn_helloWorld.sqf
+    with open(os.path.join(example_lib, "fn_helloWorld.sqf"), "w") as file:
+        file.write("systemChat \"Hello World\";")
+    # Create /functions/example_library/config.cpp
+    with open(os.path.join(example_lib, "config.cpp"), "w") as file:
+        file.write("""class EXAMPLE_LIBRARY {
+    tag = "EXAMPLE_LIBRARY";
+    class functions {
+        file = "functions\example_library";
+        class helloWorld {}; // EXAMPLE_LIBRARY_fnc_helloWorld
+    };
+};
+""")
+
+    # Preprend `#include "cfg\CfgFunctions.cpp"` to the Description.ext file to include the functions library
+    with open(os.path.join(project_path, "Description.ext"), "r") as file:
+        content = file.read()
+    with open(os.path.join(project_path, "Description.ext"), "w") as file:
+        file.write("// Prepended by A3 Launchpad\n#include \"cfg\CfgFunctions.cpp\"\n" + content)
+
+    return functions_path
+
 # Generates a scripting environment for the mission.
-def generate_scripting_environment(project_path: str, mission_type: Any = MissionType.MP):
+def generate_scripting_environment(
+    project_path: str,
+    mission_type: Any = MissionType.MP,
+    *,
+    description_ext_params: dict[str, Any] | None = None,
+):
     """
     Creates [Event Scripts](https://community.bistudio.com/wiki/Event_Scripts) in ``project_path``.
     Scripts are filtered with ``onlyMP`` / ``onlySP`` against ``mission_type`` (singleplayer vs multiplayer mission).
     Per-file bodies may be loaded from ``launchpad_data/<data_file>`` when that file exists.
+
+    When ``description_ext_params`` sets ``cba_settings_hasSettingsFile`` to 1, writes ``cba_settings.sqf``
+    (required by the CBA mission settings file feature).
     """
     mt = _coerce_mission_type(mission_type)
     data_dir = _launchpad_data_dir()
@@ -197,6 +279,19 @@ def generate_scripting_environment(project_path: str, mission_type: Any = Missio
         with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(prefix + body)
         logging.info("Wrote event script %s", out_path)
+
+    if _cba_settings_has_settings_file(description_ext_params):
+        cba_path = os.path.join(project_path, "cba_settings.sqf")
+        with open(cba_path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(
+                "// CBA mission settings (cba_settings_hasSettingsFile = 1 in Description.ext)\n"
+                "// Add overrides, e.g. force force ace_medical_medicSetting = 2;\n"
+            )
+        logging.info("Wrote CBA settings file %s", cba_path)
+
+    # Generate functions library
+    logging.info("Generating functions library in %s", project_path)
+    generate_functions_library(project_path)
 
 _MANAGED_MISSIONS_FILENAME = "managed_missions.json"
 
@@ -269,7 +364,11 @@ def generate(config: dict) -> tuple[str, list[str]]:
 
     if config.get("generate_scripting_environment"):
         logging.info("Generating event scripts in %s", project_path)
-        generate_scripting_environment(project_path, config["mission_type"])
+        generate_scripting_environment(
+            project_path,
+            config["mission_type"],
+            description_ext_params=config.get("description_ext_params"),
+        )
 
     mt = config["mission_type"]
     mission_type_str = mt.value if isinstance(mt, MissionType) else str(mt)
@@ -284,6 +383,8 @@ def generate(config: dict) -> tuple[str, list[str]]:
         "ext_params": copy.deepcopy(config["description_ext_params"]),
         "project_path": project_path,
         "profile_path": (config.get("profile_path") or "").strip() or None,
+        "github_integration": False,
+        "launch_mods": [],
     }
     scenario_uuid = add_managed_scenario(managed_row)
     return scenario_uuid, warnings

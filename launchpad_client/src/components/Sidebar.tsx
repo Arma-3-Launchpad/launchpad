@@ -1,4 +1,4 @@
-type NavId = 'home' | 'mission' | 'managed-missions' | 'settings'
+type NavId = 'home' | 'mission' | 'managed-missions' | 'testing' | 'logging' | 'settings'
 
 type Props = {
   active: NavId
@@ -10,6 +10,8 @@ const items: { id: NavId; label: string; hint: string }[] = [
   { id: 'settings', label: 'Settings', hint: 'Configure the application' },
   { id: 'mission', label: 'New Mission', hint: 'Create from template' },
   { id: 'managed-missions', label: 'Managed Missions', hint: 'View all managed missions' },
+  { id: 'testing', label: 'Testing', hint: 'Mods and Arma 3 test launch' },
+  { id: 'logging', label: 'Logs', hint: 'Live RPT stream and browse' },
 ]
 
 export function Sidebar({ active, onSelect }: Props) {

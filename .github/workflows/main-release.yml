@@ -1,0 +1,242 @@
+# This workflow is used to coordinate releases and version bumps for the entire project.
+# It is used to ensure that the project is released in a consistent and predictable manner.
+# Triggered on a push to the main branch.
+
+name: Main Release Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+  deployments: write
+
+jobs:
+
+  require-pr-merge:
+    name: Require PR merge (no direct push to main)
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure main was updated via PR merge, not direct push
+        run: |
+          if git rev-parse HEAD^2 >/dev/null 2>&1; then
+            echo "Merge commit detected (PR merge). Allowed."
+            exit 0
+          fi
+          if git log -1 --pretty=%B | grep -qE ' \(#[0-9]+\)$|^Merge pull request'; then
+            echo "PR merge (squash/rebase) detected. Allowed."
+            exit 0
+          fi
+          echo "::error::Direct push to main is not allowed."
+          exit 1
+
+  parse-commit-commands:
+    name: Parse Commit Commands
+    runs-on: [self-hosted, linux, x64]
+    needs: []
+    outputs:
+      commit_contains_update: ${{ steps.parse.outputs.commit_contains_update }}
+      commit_contains_restart: ${{ steps.parse.outputs.commit_contains_restart }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Parse commit commands
+        id: parse
+        run: |
+          set -e
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MESSAGE"
+          if echo "$COMMIT_MESSAGE" | grep -qE '!update'; then
+            echo "commit_contains_update=true" >> "$GITHUB_OUTPUT"
+            UPDATE_CMD=true
+          else
+            echo "commit_contains_update=false" >> "$GITHUB_OUTPUT"
+            UPDATE_CMD=false
+          fi
+          if echo "$COMMIT_MESSAGE" | grep -qE '!restart'; then
+            echo "commit_contains_restart=true" >> "$GITHUB_OUTPUT"
+            RESTART_CMD=true
+          else
+            echo "commit_contains_restart=false" >> "$GITHUB_OUTPUT"
+            RESTART_CMD=false
+          fi
+          echo "Parsed: !update=$UPDATE_CMD, !restart=$RESTART_CMD"
+
+  version:
+    name: Bump version
+    runs-on: [self-hosted, linux, x64]
+    needs: []
+    outputs:
+      version_bumped: ${{ steps.bump.outputs.version_bumped }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read current version
+        id: read_version
+        run: |
+          CURRENT="0.0.0"
+          if [ -f version.json ]; then
+            C=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' version.json)
+            [ -n "$C" ] && CURRENT="$C"
+          fi
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current version: $CURRENT"
+
+      - name: Parse conventional commits and compute bump
+        id: bump
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -e
+          CURRENT="${{ steps.read_version.outputs.current }}"
+          # Commits in this push (single commit if initial push)
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            REVLIST=$(git rev-parse HEAD)
+          else
+            REVLIST=$(git rev-list "$BEFORE..$AFTER")
+          fi
+          # Avoid infinite loop: if this push is only our own "chore: bump version to X.Y.Z" commit(s), do not bump again
+          ONLY_BOT_BUMP=true
+          for hash in $REVLIST; do
+            author=$(git log -1 "$hash" --format=%ae)
+            subject=$(git log -1 "$hash" --pretty=%s)
+            case "$author" in
+              github-actions[bot]@users.noreply.github.com|41898282+github-actions[bot]@users.noreply.github.com) ;;
+              *) ONLY_BOT_BUMP=false; break ;;
+            esac
+            if ! echo "$subject" | grep -qE '^chore: bump version to [0-9]+\.[0-9]+\.[0-9]+$'; then
+              ONLY_BOT_BUMP=false
+              break
+            fi
+          done
+          if [ "$ONLY_BOT_BUMP" = "true" ] && [ -n "$REVLIST" ]; then
+            echo "version_bumped=false" >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "Skip: push only contains bot version-bump commit(s); no new release to avoid loop."
+            exit 0
+          fi
+          # Per commit: 3=major, 2=minor, 1=patch, 0=none (chore / no conventional)
+          MAX_BUMP=0
+          for hash in $REVLIST; do
+            body=$(git log -1 "$hash" --pretty=%B)
+            first=$(echo "$body" | head -1)
+            bump=0
+            if echo "$body" | grep -q 'BREAKING CHANGE'; then bump=3; fi
+            if [ "$bump" -lt 3 ] && echo "$first" | grep -qE '^(feat|fix)!'; then bump=3; fi
+            if [ "$bump" -lt 2 ] && echo "$first" | grep -qE '^feat(\s*\([^)]*\))?:'; then bump=2; fi
+            if [ "$bump" -lt 1 ] && echo "$first" | grep -qE '^fix(\s*\([^)]*\))?:'; then bump=1; fi
+            [ "$bump" -gt "$MAX_BUMP" ] && MAX_BUMP=$bump
+          done
+          # Apply bump to current version
+          IFS=. read -r major minor patch <<< "$CURRENT"
+          major=${major:-0}
+          minor=${minor:-0}
+          patch=${patch:-0}
+          if [ "$MAX_BUMP" -eq 3 ]; then
+            major=$((major + 1)); minor=0; patch=0
+          elif [ "$MAX_BUMP" -eq 2 ]; then
+            minor=$((minor + 1)); patch=0
+          elif [ "$MAX_BUMP" -eq 1 ]; then
+            patch=$((patch + 1))
+          fi
+          if [ "$MAX_BUMP" -ge 1 ]; then
+            NEW_VERSION="$major.$minor.$patch"
+            echo "version_bumped=true" >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            echo "Bump type: $([ "$MAX_BUMP" -eq 3 ] && echo major || [ "$MAX_BUMP" -eq 2 ] && echo minor || echo patch) -> $NEW_VERSION"
+          else
+            echo "version_bumped=false" >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "No conventional bump (chore/other); version unchanged: $CURRENT"
+          fi
+
+  persist-version:
+    name: Update version.json and push
+    runs-on: [self-hosted, linux, x64]
+    needs: [version]
+    if: needs.version.outputs.version_bumped == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version.json, mission/version.sqf, Description.ext, mission.sqm
+        run: |
+          NEW_VERSION="${{ needs.version.outputs.new_version }}"
+          # Write version.json (portable: no jq)
+          echo "{\"version\": \"$NEW_VERSION\"}" > version.json
+          cat version.json
+
+          # Ensure mission/version.sqf reflects the new version
+          mkdir -p mission
+          cat > mission/version.sqf <<EOF
+          GM_VERSION = "$NEW_VERSION"
+          EOF
+          echo "Updated mission/version.sqf to $NEW_VERSION"
+
+          # Update mission/Description.ext briefingName to include the new version
+          if [ -f mission/Description.ext ]; then
+            # Replace the version in the MAD Company briefingName line while keeping formatting
+            sed -i 's/^\([ \t]*briefingName[ \t]*=[ \t]*"MAD Company v\)[0-9.]\+\(";\)/\1'"$NEW_VERSION"'\2/' mission/Description.ext
+            echo "Updated mission/Description.ext briefingName to MAD Company v$NEW_VERSION"
+          else
+            echo "mission/Description.ext not found; skipping briefingName version update"
+          fi
+
+          # Update mission/mission.sqm briefingName (editor / mission list display)
+          if [ -f mission/mission.sqm ]; then
+            sed -i 's/^\([ \t]*briefingName="MAD Company v\)[0-9.]\+\(";\)/\1'"$NEW_VERSION"'\2/' mission/mission.sqm
+            echo "Updated mission/mission.sqm briefingName to MAD Company v$NEW_VERSION"
+          else
+            echo "mission/mission.sqm not found; skipping briefingName version update"
+          fi
+
+      - name: Commit and push version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json mission/version.sqf mission/Description.ext mission/mission.sqm
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: bump version to ${{ needs.version.outputs.new_version }}"
+            git push origin HEAD:main
+          fi
+
+  release:
+    name: Create GitHub release
+    runs-on: [self-hosted, linux, x64]
+    needs: [version, persist-version]
+    if: needs.version.outputs.version_bumped == 'true'
+    steps:
+      - name: Checkout main (with version bump commit)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create release (draft for release notes)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          name: v${{ needs.version.outputs.new_version }}
+          body: |
+            ## Release notes
+            Edit this draft release to add your release notes, then publish.
+          draft: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

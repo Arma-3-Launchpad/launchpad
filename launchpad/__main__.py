@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlparse
 
 from api import A3LaunchpadAPI, NdjsonStream
 from mission_gen import _launchpad_data_dir
+from sock_server import FramedIpcService
 
 def _configure_logging() -> None:
     """Log to ``launchpad_data/logs/launchpad.log`` and mirror to stderr."""
@@ -220,6 +221,15 @@ class A3Launchpad:
     def __init__(self, api_class: type[A3LaunchpadAPI] = A3LaunchpadAPI):
         self.config = json.load(open(config_path, encoding="utf-8"))
         self.api = api_class()
+        ipc_host = str(self.config.get("ipc_host", "127.0.0.1"))
+        ipc_port = int(
+            self.config.get(
+                "ipc_port",
+                int(self.config.get("port", 8111)) + 1,
+            )
+        )
+        self._ipc = FramedIpcService(ipc_host, ipc_port)
+        self._ipc.start_background()
         bundled = os.path.join(_bundle_root(), "web_dist")
         dev = os.path.normpath(
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "launchpad_client", "dist")
@@ -261,6 +271,11 @@ if __name__ == "__main__":
                     "arma3_path": "",
                     "arma3_tools_path": "",
                     "arma3_profile_path": "",
+                    "arma3_appdata_path": (
+                        r"%LOCALAPPDATA%\Arma 3" if os.name == "nt" else ""
+                    ),
+                    "default_author": "",
+                    "github_new_repo_visibility": "private",
                 },
                 f,
             )

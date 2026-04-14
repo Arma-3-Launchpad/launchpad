@@ -4,9 +4,11 @@ import { HomePage } from './pages/HomePage'
 import { MissionBuildPage } from './pages/MissionBuildPage'
 import { MissionListPage } from './pages/MissionList'
 import { SettingsPage } from './pages/SettingsPage'
+import { TestingPage } from './pages/Testing'
+import { LoggingPage } from './pages/Logging'
 import './App.css'
 
-type NavId = 'home' | 'mission' | 'managed-missions' | 'settings'
+type NavId = 'home' | 'mission' | 'managed-missions' | 'testing' | 'logging' | 'settings'
 export default function App() {
   const [page, setPage] = useState<NavId>('home')
 
@@ -25,7 +27,11 @@ export default function App() {
           {page === 'mission' && (
             <MissionBuildPage onGoSettings={() => setPage('settings')} />
           )}
-          {page === 'managed-missions' && <MissionListPage />}
+          {page === 'managed-missions' && (
+            <MissionListPage onOpenSettings={() => setPage('settings')} />
+          )}
+          {page === 'testing' && <TestingPage />}
+          {page === 'logging' && <LoggingPage />}
         </main>
       </div>
     </div>
