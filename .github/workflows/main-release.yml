@@ -1,6 +1,6 @@
 # This workflow is used to coordinate releases and version bumps for the entire project.
 # It is used to ensure that the project is released in a consistent and predictable manner.
-# Triggered on a push to the main branch.
+# Triggered on a push to the main branch. bump
 
 name: Main Release Workflow
 
@@ -141,42 +141,18 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update version.json, mission/version.sqf, Description.ext, mission.sqm
+      - name: Update version.json
         run: |
           NEW_VERSION="${{ needs.version.outputs.new_version }}"
           # Write version.json (portable: no jq)
           echo "{\"version\": \"$NEW_VERSION\"}" > version.json
           cat version.json
 
-          # Ensure mission/version.sqf reflects the new version
-          mkdir -p mission
-          cat > mission/version.sqf <<EOF
-          GM_VERSION = "$NEW_VERSION"
-          EOF
-          echo "Updated mission/version.sqf to $NEW_VERSION"
-
-          # Update mission/Description.ext briefingName to include the new version
-          if [ -f mission/Description.ext ]; then
-            # Replace the version in the MAD Company briefingName line while keeping formatting
-            sed -i 's/^\([ \t]*briefingName[ \t]*=[ \t]*"MAD Company v\)[0-9.]\+\(";\)/\1'"$NEW_VERSION"'\2/' mission/Description.ext
-            echo "Updated mission/Description.ext briefingName to MAD Company v$NEW_VERSION"
-          else
-            echo "mission/Description.ext not found; skipping briefingName version update"
-          fi
-
-          # Update mission/mission.sqm briefingName (editor / mission list display)
-          if [ -f mission/mission.sqm ]; then
-            sed -i 's/^\([ \t]*briefingName="MAD Company v\)[0-9.]\+\(";\)/\1'"$NEW_VERSION"'\2/' mission/mission.sqm
-            echo "Updated mission/mission.sqm briefingName to MAD Company v$NEW_VERSION"
-          else
-            echo "mission/mission.sqm not found; skipping briefingName version update"
-          fi
-
       - name: Commit and push version
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add version.json mission/version.sqf mission/Description.ext mission/mission.sqm
+          git add version.json
           if ! git diff --staged --quiet; then
             git commit -m "chore: bump version to ${{ needs.version.outputs.new_version }}"
             git push origin HEAD:main
