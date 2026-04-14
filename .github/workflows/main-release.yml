@@ -1,6 +1,6 @@
 # This workflow is used to coordinate releases and version bumps for the entire project.
 # It is used to ensure that the project is released in a consistent and predictable manner.
-# Triggered on a push to the main branch.
+# Triggered on a push to the main branch. bump
 
 name: Main Release Workflow
 
