@@ -11,16 +11,56 @@ const extraResource = [];
 if (fs.existsSync(launchpadFrozenBin)) extraResource.push(launchpadFrozenBin);
 if (fs.existsSync(launchpadWebDist)) extraResource.push(launchpadWebDist);
 
+/** Set by ``package.py`` to a fresh ``build/electron-forge-*`` path so Windows never has to delete a locked ``app/out`` tree. */
+const outDir = process.env.LAUNCHPAD_ELECTRON_OUT
+  ? path.resolve(process.env.LAUNCHPAD_ELECTRON_OUT)
+  : 'out';
+
+/** Base path without extension for ``@electron/packager`` (``.ico`` / ``.icns`` / ``.png`` per platform). */
+const appIconBase = path.resolve(__dirname, '..', 'renderer', 'public', 'favicon');
+const appIconIco = `${appIconBase}.ico`;
+
+/** Drop unused Chromium translations (often tens of MB under ``locales/``). */
+function prunePackagerLocales(buildPath, platform) {
+  if (platform !== 'win32' && platform !== 'linux') {
+    return;
+  }
+  const localesDir = path.join(buildPath, 'locales');
+  if (!fs.existsSync(localesDir)) {
+    return;
+  }
+  const keep = new Set(['en-US.pak']);
+  for (const name of fs.readdirSync(localesDir)) {
+    if (!keep.has(name)) {
+      fs.unlinkSync(path.join(localesDir, name));
+    }
+  }
+}
+
 module.exports = {
+  outDir,
   packagerConfig: {
     asar: true,
+    icon: appIconBase,
+    afterCopy: [
+      (buildPath, _electronVersion, platform, _arch, callback) => {
+        try {
+          prunePackagerLocales(buildPath, platform);
+          callback();
+        } catch (err) {
+          callback(err);
+        }
+      },
+    ],
     ...(extraResource.length ? { extraResource } : {}),
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      config: {},
+      config: {
+        setupIcon: appIconIco,
+      },
     },
     {
       name: '@electron-forge/maker-zip',
@@ -68,5 +108,19 @@ module.exports = {
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
+  ],
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'a3r0id',
+          name: 'a3-mission-launchpad',
+        },
+        prerelease: false,
+        /** Must match ``releaseTag`` derived in ``main.js`` (default ``v`` + semver from ``version.json``). */
+        tagPrefix: 'v',
+      },
+    },
   ],
 };

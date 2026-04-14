@@ -9,6 +9,12 @@ Build deliverables under ``A3LaunchPad/``:
 
 Frozen server reads ``web_dist`` and writes ``launchpad_data`` next to ``bin`` (A3LaunchPad root).
 
+``python package.py --install`` (Windows) performs a full package, runs Electron Forge ``make``
+to produce the Squirrel installer, then launches that Setup.exe.
+
+``python package.py --uninstall`` (Windows) runs Squirrel's ``Update.exe --uninstall`` for the
+installed app (no build). Does not remove ``A3LaunchPad/`` staged output in the repo.
+
 Prerequisites: ``npm run build`` in ``launchpad_client/renderer``, PyInstaller on PATH,
 Pillow on Windows for ``launchpad.spec``, and Node/npm for the Electron step.
 """
@@ -20,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 
@@ -30,6 +37,8 @@ CLIENT_DIST = REPO / "launchpad_client" / "renderer" / "dist"
 EXT_ROOT = REPO / "launchpad_mod" / "extension"
 ADDON_PBO_NAME = "a3_launchpad_ext_core.pbo"
 HEMTT_BUILD_ADDONS = REPO / "launchpad_mod" / ".hemttout" / "build" / "addons"
+# Squirrel per-user install dir under ``%LOCALAPPDATA%``; must match ``name`` in ``launchpad_client/app/package.json``.
+ELECTRON_SQUIRREL_APP_FOLDER = "a3-mission-launchpad"
 
 
 def _die(msg: str) -> None:
@@ -52,13 +61,14 @@ def _rmtree_retry(
     *,
     attempts: int = 8,
     delay_sec: float = 0.75,
-) -> None:
+    fatal: bool = True,
+) -> bool:
     """
     Windows often leaves ``app.asar`` locked after a dev Electron run or Explorer preview.
     Removing ``out/`` before ``electron-forge package`` avoids EBUSY unlink errors.
     """
     if not path.exists():
-        return
+        return True
     last_err: OSError | None = None
     for i in range(attempts):
         try:
@@ -70,23 +80,34 @@ def _rmtree_retry(
                 break
             time.sleep(delay_sec)
     assert last_err is not None
-    _die(
+    msg = (
         f"Could not remove {path} ({last_err}).\n"
         "Close any running Launchpad/Electron windows, exit debug sessions that attach to npm, "
         "and close Explorer windows previewing that folder—then run packaging again."
     )
+    if fatal:
+        _die(msg)
+    print(f"Warning: {msg}", file=sys.stderr)
+    return False
 
 
-def _run_npm(args: list[str], cwd: Path) -> None:
+def _run_npm(
+    args: list[str],
+    cwd: Path,
+    *,
+    extra_env: dict[str, str] | None = None,
+) -> None:
+    env = {**os.environ, **(extra_env or {})}
     if sys.platform == "win32":
         subprocess.run(
             subprocess.list2cmdline(["npm", *args]),
             cwd=str(cwd),
             shell=True,
             check=True,
+            env=env,
         )
     else:
-        subprocess.run(["npm", *args], cwd=str(cwd), check=True)
+        subprocess.run(["npm", *args], cwd=str(cwd), check=True, env=env)
 
 
 def stage_web_dist() -> None:
@@ -99,22 +120,49 @@ def stage_web_dist() -> None:
 
 
 def stage_electron_app() -> None:
-    """Run ``electron-forge package`` and copy ``out/`` into ``A3LaunchPad/app``."""
+    """Run ``electron-forge package`` and copy the packager output into ``A3LaunchPad/app``."""
     app_dir = REPO / "launchpad_client" / "app"
     if not (app_dir / "node_modules").is_dir():
         print("Installing Electron app dependencies (npm ci)...")
         _run_npm(["ci"], app_dir)
-    out_dir = app_dir / "out"
-    print("Clearing Electron Forge output (avoids locked app.asar on Windows)...")
-    _rmtree_retry(out_dir)
-    _run_npm(["run", "package"], app_dir)
-    if not out_dir.is_dir() or not any(out_dir.iterdir()):
-        print(f"Warning: Electron package produced no output under {out_dir}", file=sys.stderr)
+    # Fresh directory each run — avoids WinError 32 when ``app/out/.../app.asar`` stays locked
+    # (Explorer, indexer, AV, IDE) and cannot be deleted.
+    electron_out = REPO / "build" / f"electron-forge-{uuid.uuid4().hex[:12]}"
+    electron_out.mkdir(parents=True, exist_ok=True)
+    out_abs = str(electron_out.resolve())
+    print(f"Electron Forge output directory: {out_abs}")
+    _run_npm(
+        ["run", "package"],
+        app_dir,
+        extra_env={"LAUNCHPAD_ELECTRON_OUT": out_abs},
+    )
+    if not electron_out.is_dir() or not any(electron_out.iterdir()):
+        print(
+            f"Warning: Electron package produced no output under {electron_out}",
+            file=sys.stderr,
+        )
         return
     dest = A3 / "app"
-    _rmtree_retry(dest)
-    shutil.copytree(out_dir, dest)
-    print(f"Staged Electron app: {out_dir} -> {dest}")
+    if _rmtree_retry(dest, fatal=False):
+        shutil.copytree(electron_out, dest)
+        print(f"Staged Electron app: {electron_out} -> {dest}")
+    else:
+        # Keep build successful even if the previous app folder is locked by Windows.
+        fallback = A3 / f"app-{uuid.uuid4().hex[:8]}"
+        _rmtree_retry(fallback, fatal=False)
+        shutil.copytree(electron_out, fallback)
+        print(
+            f"Staged Electron app to fallback location (default app folder locked): {fallback}",
+            file=sys.stderr,
+        )
+    try:
+        shutil.rmtree(electron_out)
+    except OSError:
+        print(
+            f"Note: could not remove temporary {electron_out} (still in use). "
+            "You can delete it later; it is under build/ and gitignored.",
+            file=sys.stderr,
+        )
 
 
 def _find_extension_binary() -> Path | None:
@@ -206,7 +254,8 @@ def stage_mod_deliverables() -> None:
     print(f"Staged addon PBO: {pbo_src.name} -> {dest_pbo}")
 
 
-def cmd_package() -> None:
+def _package_core() -> Path:
+    """Stage web UI, PyInstaller onedir into ``A3LaunchPad/bin``, and mod deliverables. Returns ``bin_out``."""
     preflight_package()
     A3.mkdir(parents=True, exist_ok=True)
     stage_web_dist()
@@ -232,11 +281,139 @@ def cmd_package() -> None:
         check=True,
     )
     stage_mod_deliverables()
+    return bin_out
+
+
+def cmd_package() -> None:
+    bin_out = _package_core()
     stage_electron_app()
     print(
         f"Package complete: server in {bin_out}, web UI in {A3 / 'web_dist'}, "
         f"mod under {A3 / 'mod'}, Electron under {A3 / 'app'}, data dir {A3 / 'launchpad_data'}"
     )
+
+
+def _sync_packaged_dir_to_a3_app(forge_out: Path) -> None:
+    """After ``make``, copy ``*-win32-x64`` (or ``*-darwin-*`` / ``*-linux-*``) into ``A3LaunchPad/app``."""
+    if sys.platform == "win32":
+        globs = ("*-win32-x64",)
+    elif sys.platform == "darwin":
+        globs = ("*-darwin-*",)
+    else:
+        globs = ("*-linux-*",)
+    candidates: list[Path] = []
+    for pat in globs:
+        candidates.extend(p for p in forge_out.glob(pat) if p.is_dir())
+    if not candidates:
+        return
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    src = candidates[0]
+    dest = A3 / "app"
+    if _rmtree_retry(dest, fatal=False):
+        shutil.copytree(src, dest)
+        print(f"Staged Electron app: {src} -> {dest}")
+
+
+def _find_squirrel_setup_exe(forge_out: Path) -> Path | None:
+    make_dir = forge_out / "make"
+    if not make_dir.is_dir():
+        return None
+    candidates = [
+        p
+        for p in make_dir.rglob("*.exe")
+        if "setup" in p.name.lower() and p.is_file()
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def _run_electron_make_and_launch_setup() -> None:
+    if sys.platform != "win32":
+        _die(
+            "python package.py --install is only implemented on Windows (Squirrel installer).\n"
+            "  On other platforms run: cd launchpad_client/app && npm run make"
+        )
+    app_dir = REPO / "launchpad_client" / "app"
+    if not (app_dir / "node_modules").is_dir():
+        print("Installing Electron app dependencies (npm ci)...")
+        _run_npm(["ci"], app_dir)
+    electron_out = REPO / "build" / f"electron-forge-make-{uuid.uuid4().hex[:12]}"
+    electron_out.mkdir(parents=True, exist_ok=True)
+    out_abs = str(electron_out.resolve())
+    print(f"Electron Forge make output directory: {out_abs}")
+    _run_npm(
+        ["run", "make"],
+        app_dir,
+        extra_env={"LAUNCHPAD_ELECTRON_OUT": out_abs},
+    )
+    _sync_packaged_dir_to_a3_app(electron_out)
+    setup = _find_squirrel_setup_exe(electron_out)
+    if setup is None or not setup.is_file():
+        _die(
+            f"No Squirrel Setup.exe found under {electron_out / 'make'}.\n"
+            "  Check Electron Forge output and maker-squirrel configuration."
+        )
+    print(f"Launching installer: {setup}")
+    rc = subprocess.run([str(setup)]).returncode
+    if rc != 0:
+        print(f"Installer exited with code {rc}.", file=sys.stderr)
+    try:
+        shutil.rmtree(electron_out)
+    except OSError:
+        print(
+            f"Note: could not remove temporary {electron_out} (still in use). "
+            "You can delete it later; it is under build/ and gitignored.",
+            file=sys.stderr,
+        )
+
+
+def cmd_install_electron() -> None:
+    """Full package plus ``electron-forge make`` and run the Windows Setup.exe."""
+    _package_core()
+    _run_electron_make_and_launch_setup()
+    print(
+        f"Install step finished. Packaged layout remains under {A3} "
+        f"(installer output may have been removed from build/)."
+    )
+
+
+def _squirrel_update_exe_windows() -> Path | None:
+    local = os.environ.get("LOCALAPPDATA", "")
+    if not local:
+        return None
+    base = Path(local)
+    direct = base / ELECTRON_SQUIRREL_APP_FOLDER / "Update.exe"
+    if direct.is_file():
+        return direct
+    for child in base.iterdir():
+        if not child.is_dir():
+            continue
+        if child.name == ELECTRON_SQUIRREL_APP_FOLDER or child.name.startswith(
+            f"{ELECTRON_SQUIRREL_APP_FOLDER}."
+        ):
+            candidate = child / "Update.exe"
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def cmd_uninstall_electron() -> None:
+    if sys.platform != "win32":
+        _die(
+            "python package.py --uninstall is only implemented on Windows (Squirrel).\n"
+            "  Remove the app from your system using the platform uninstaller."
+        )
+    update_exe = _squirrel_update_exe_windows()
+    if update_exe is None:
+        _die(
+            "No Squirrel install found (Update.exe missing).\n"
+            f"  Look under %LOCALAPPDATA%\\{ELECTRON_SQUIRREL_APP_FOLDER}\\\n"
+            "  If the app was never installed with the Setup.exe, there is nothing to remove."
+        )
+    print(f"Running uninstaller: {update_exe} --uninstall")
+    subprocess.run([str(update_exe), "--uninstall"], check=False)
 
 
 def _desktop_dir() -> Path:
@@ -294,7 +471,17 @@ def cmd_install_desktop() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Package Launchpad into A3LaunchPad/")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Windows: full package, build Squirrel installer (npm run make), and run Setup.exe",
+    )
+    parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Windows: run Squirrel Update.exe --uninstall (no build)",
+    )
+    sub = parser.add_subparsers(dest="cmd", required=False)
 
     p_pkg = sub.add_parser("package", help="PyInstaller onedir into A3LaunchPad/bin + stage mod")
     p_pkg.set_defaults(func=cmd_package)
@@ -309,6 +496,23 @@ def main() -> None:
     p_desk.set_defaults(func=cmd_install_desktop)
 
     args = parser.parse_args()
+    if args.install and args.uninstall:
+        parser.error("use at most one of --install and --uninstall")
+    if args.install:
+        if args.cmd is not None:
+            parser.error("--install cannot be combined with a subcommand")
+        cmd_install_electron()
+        return
+    if args.uninstall:
+        if args.cmd is not None:
+            parser.error("--uninstall cannot be combined with a subcommand")
+        cmd_uninstall_electron()
+        return
+    if not args.cmd:
+        parser.error(
+            "specify a command (package, build, install-desktop) "
+            "or use --install / --uninstall alone"
+        )
     args.func()
 
 

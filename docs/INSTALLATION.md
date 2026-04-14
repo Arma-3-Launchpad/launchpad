@@ -71,7 +71,13 @@ For users who prefer not to set up a development environment, a portable binary 
    ```
 
    The subcommand `build` is an alias for `package` (same PyInstaller step). Requirements: PyInstaller on `PATH`, Pillow for the Windows `.ico`, and `launchpad_client/renderer/dist` present (see `package.py` preflight).
-   
+
+## Publishing desktop builds to GitHub Releases
+
+1. Bump `version.json` at the repo root and `launchpad_client/app/package.json` so they match (the in-app “Check for updates” compares your installed app version to `version.json` on the `main` branch).
+2. From `launchpad_client/app`, run `npm run make` after a full `python package.py package` so installers are current.
+3. To upload artifacts with Electron Forge, set a GitHub token with `repo` scope and run `npm run publish` from `launchpad_client/app` (Forge uses `@electron-forge/publisher-github` as configured in `forge.config.js`). Use a personal access token or `GITHUB_TOKEN` in CI as appropriate.
+
 ---
 
 Feel free to reach out if you encounter any issues or have questions!

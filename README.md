@@ -6,7 +6,7 @@ The badge reflects the latest **main** run. For another branch, open [Actions â†
 
 ![Launchpad](launchpad.png)
 
-**Launchpad** is a desktop app that helps you build and organize **Arma 3 missions** (the game calls them *scenarios* in some menus). There is a lot of tooling out there for mod makers; this project focuses on **mission makers** who want a clearer folder layout, repeatable builds, and a simple UI instead of juggling scripts by hand.
+**Launchpad** is a robust suite of tools to aid Arma 3 mission makers and eventually modders. Launchpad features project organization/resource tracking, scripting, and soft-profiling - both in-game and out. There is a lot of tooling out there for mod makers; This project focuses on **mission makers**, at least to begin with. The main purpose of Launchpad is to fill the gap that Arma 3 Tools and 3Den lack, that Enfusion showed us. 
 
 If you are new here: you do **not** need to be a programmer to use the packaged app. If you want to change the app itself or run from source, the [installation guide](docs/INSTALLATION.md) walks through Python, a virtual environment, and running the app from the `launchpad_server` package (for example `python -m launchpad_server` from the repo root).
 
@@ -64,7 +64,7 @@ Before the steps below, install Launchpad using whichever path fits you:
 
 From `launchpad_client/app`, `npm run dev` starts the API and opens the Electron window with the Vite renderer. The dev helper prefers a **PyInstaller** build under `A3LaunchPad/bin/` when it exists (same layout as releases); otherwise it runs `python -m launchpad_server`. Set `LAUNCHPAD_USE_PYTHON=1` to always use the interpreter, or `LAUNCHPAD_BACKEND_EXE` to point at a specific binary.
 
-`python package.py package` (and `python build.py`) stages **`A3LaunchPad/web_dist`**, **`A3LaunchPad/bin`**, **`A3LaunchPad/mod`**, and runs Electron Forge **`package`**, then copies **`launchpad_client/app/out`** to **`A3LaunchPad/app`**. The frozen Python server loads the UI from `web_dist` beside `bin`, and stores **`launchpad_data`** at **`A3LaunchPad/launchpad_data`**. For installers, run `npm run make` in `launchpad_client/app` after a full package; adjust `forge.config.js` for publishing.
+`python package.py package` (and `python build.py`) stages **`A3LaunchPad/web_dist`**, **`A3LaunchPad/bin`**, **`A3LaunchPad/mod`**, and runs Electron Forge **`package`** into a fresh **`build/electron-forge-*`** folder (avoids Windows file locks on **`launchpad_client/app/out`**), then copies that output to **`A3LaunchPad/app`**. The frozen Python server loads the UI from `web_dist` beside `bin`, and stores **`launchpad_data`** at **`A3LaunchPad/launchpad_data`**. For installers, run `npm run make` in `launchpad_client/app` after a full package; use **`npm run publish`** with a GitHub token to push to Releases (see [Installation](docs/INSTALLATION.md)). In the desktop app, **Settings â†’ Check for updates** compares your version to **`version.json`** on `main` and can open the latest release download page.
 
 ---
 

@@ -3,6 +3,10 @@
   "productName": "a3-mission-launchpad",
   "version": "1.0.0",
   "description": "A3 Mission Launchpad",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a3r0id/a3-mission-launchpad.git"
+  },
   "main": ".vite/build/main.js",
   "scripts": {
     "dev": "concurrently -k -n backend,electron \"npm run dev:backend\" \"wait-on tcp:127.0.0.1:8111 && npm run dev:electron:inspect\"",
@@ -26,12 +30,13 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.5.0",
     "@electron-forge/plugin-fuses": "^7.5.0",
     "@electron-forge/plugin-vite": "^7.11.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "babel-plugin-react-compiler": "^1.0.0",
-    "concurrently": "^9.1.2",
+    "@electron-forge/publisher-github": "^7.11.1",
     "@electron/fuses": "^1.8.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "babel-loader": "^9.2.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "clean-webpack-plugin": "^4.0.0",
+    "concurrently": "^9.1.2",
     "electron": "^33.2.0",
     "electron-reload": "^2.0.0-alpha.1",
     "express": "^4.21.1",

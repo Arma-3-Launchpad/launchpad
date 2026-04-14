@@ -4,6 +4,19 @@ import {
   updateSettings,
   type LaunchpadSettings,
 } from '../api/launchpad'
+import { getElectronIpc } from '../electronIpc'
+
+type CheckUpdatesOk = {
+  ok: true
+  current: string
+  latest: string
+  updateAvailable: boolean
+  releasesUrl: string
+  releaseTag: string
+  canAutoInstall: boolean
+}
+
+type CheckUpdatesResult = CheckUpdatesOk | { ok: false; message?: string }
 
 function trimField(v: string | undefined | null): string {
   return (v ?? '').trim()
@@ -33,6 +46,9 @@ export function SettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [updateBusy, setUpdateBusy] = useState(false)
+  const [installBusy, setInstallBusy] = useState(false)
+  const [updateResult, setUpdateResult] = useState<CheckUpdatesResult | null>(null)
 
   const draft: LaunchpadSettings = {
     arma3_path: trimField(arma3Path),
@@ -113,6 +129,51 @@ export function SettingsPage() {
     }
   }
 
+  async function onCheckForUpdates() {
+    setUpdateBusy(true)
+    setUpdateResult(null)
+    try {
+      const ipc = getElectronIpc()
+      if (!ipc) {
+        setUpdateResult({ ok: false, message: 'Updates can be checked from the desktop app.' })
+        return
+      }
+      const raw = (await ipc.invoke('checkForUpdates')) as CheckUpdatesResult
+      setUpdateResult(raw)
+    } catch {
+      setUpdateResult({ ok: false, message: 'Something went wrong while checking.' })
+    } finally {
+      setUpdateBusy(false)
+    }
+  }
+
+  async function onOpenDownloads() {
+    const ipc = getElectronIpc()
+    if (!ipc || !updateResult || updateResult.ok !== true) return
+    await ipc.invoke('openExternalUrl', updateResult.releasesUrl)
+  }
+
+  async function onInstallUpdate() {
+    const ipc = getElectronIpc()
+    if (!ipc || !updateResult || updateResult.ok !== true || !updateResult.updateAvailable) return
+    setInstallBusy(true)
+    try {
+      const raw = (await ipc.invoke('installUpdate', { releaseTag: updateResult.releaseTag })) as
+        | { ok: true }
+        | { ok: false; message?: string }
+      if (!raw.ok && 'message' in raw && raw.message) {
+        setUpdateResult({ ok: false, message: raw.message as string })
+      }
+    } catch {
+      setUpdateResult({
+        ok: false,
+        message: 'Could not install the update from here. Try the downloads page instead.',
+      })
+    } finally {
+      setInstallBusy(false)
+    }
+  }
+
   function onDiscard() {
     if (!saved) return
     setArma3Path(saved.arma3_path ?? '')
@@ -130,9 +191,75 @@ export function SettingsPage() {
       <header className="page-header">
         <h1 className="page-title">Settings</h1>
         <p className="page-lead">
-          Settings can be edited manually in <span className="shell-inline-code">launchpad_data/settings.json</span>.
+          Paths and preferences are saved locally on your computer. You can change them any time.
         </p>
       </header>
+
+      <section className="card form-card" aria-labelledby="updates-heading">
+        <h2 id="updates-heading" className="card-title">
+          Updates
+        </h2>
+        <p className="card-body">
+          See whether a newer version is available. If you installed with the Windows setup program, you can install
+          updates from here when one is ready.
+        </p>
+        <div className="form-actions">
+          <button
+            type="button"
+            className={
+              updateResult?.ok === true && updateResult.updateAvailable && updateResult.canAutoInstall
+                ? 'btn btn-ghost'
+                : 'btn btn-primary'
+            }
+            onClick={() => void onCheckForUpdates()}
+            disabled={updateBusy || installBusy}
+          >
+            {updateBusy ? 'Checking…' : 'Check for updates'}
+          </button>
+          {updateResult?.ok === true && updateResult.updateAvailable && updateResult.canAutoInstall && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void onInstallUpdate()}
+              disabled={installBusy}
+            >
+              {installBusy ? 'Installing…' : 'Install update'}
+            </button>
+          )}
+          {updateResult?.ok === true && updateResult.updateAvailable && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => void onOpenDownloads()}
+              disabled={installBusy}
+            >
+              Open downloads
+            </button>
+          )}
+        </div>
+        {updateResult?.ok === true && !updateResult.updateAvailable && (
+          <p className="card-body" role="status">
+            You are on the latest version ({updateResult.current}).
+          </p>
+        )}
+        {updateResult?.ok === true && updateResult.updateAvailable && (
+          <p className="card-body" role="status">
+            A newer version is available ({updateResult.latest}). Your version is {updateResult.current}.
+            {!updateResult.canAutoInstall && (
+              <>
+                {' '}
+                Use the downloads page to get the installer, or install with the Windows setup program to enable updates
+                from Settings.
+              </>
+            )}
+          </p>
+        )}
+        {updateResult?.ok === false && updateResult.message && (
+          <p className="form-banner form-banner-error" role="alert">
+            {updateResult.message}
+          </p>
+        )}
+      </section>
 
       {loadError && (
         <p className="form-banner form-banner-error" role="alert">

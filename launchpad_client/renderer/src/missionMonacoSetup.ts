@@ -1,12 +1,34 @@
 import { loader } from '@monaco-editor/react'
 import { shikiToMonaco } from '@shikijs/monaco'
-import { createHighlighter } from 'shiki'
+import { createBundledHighlighter } from '@shikijs/core'
+import { createOnigurumaEngine } from '@shikijs/engine-oniguruma'
 import type { Monaco } from '@monaco-editor/react'
 
 import extGrammar from '../../../launchpad_server/thirdparty/syntax/ext.min.json'
 import sqfGrammar from '../../../launchpad_server/thirdparty/syntax/sqf.min.json'
 
 const MISSION_EDITOR_THEME = 'dark-plus' as const
+
+/** Fine-grained bundle: avoid ``import from 'shiki'`` (pulls every language into ``web_dist``). */
+const createHighlighter = createBundledHighlighter({
+  themes: {
+    [MISSION_EDITOR_THEME]: () => import('@shikijs/themes/dark-plus'),
+  },
+  langs: {
+    cpp: () => import('@shikijs/langs/cpp'),
+    /** No ``@shikijs/langs/plaintext`` export; Shiki treats plain text as an empty grammar. */
+    plaintext: async () =>
+      ({
+        id: 'plaintext',
+        name: 'Plain Text',
+        scopeName: 'text.plain',
+        patterns: [],
+      }) as never,
+    ext: async () => ({ ...extGrammar, id: 'ext' }) as never,
+    sqf: async () => ({ ...sqfGrammar, id: 'sqf' }) as never,
+  },
+  engine: () => createOnigurumaEngine(import('shiki/wasm')),
+})
 
 let setupPromise: Promise<void> | null = null
 
@@ -29,13 +51,7 @@ export function ensureMissionMonacoShiki(): Promise<void> {
       const monaco = (await loader.init()) as Monaco
       const highlighter = await createHighlighter({
         themes: [MISSION_EDITOR_THEME],
-        langs: [
-          'cpp',
-          'plaintext',
-          // Shiki loads embedded TextMate grammars when `id` is set; @shikijs/types omits this field.
-          { ...extGrammar, id: 'ext' } as never,
-          { ...sqfGrammar, id: 'sqf' } as never,
-        ],
+        langs: ['cpp', 'plaintext', 'ext', 'sqf'],
       })
 
       monaco.languages.register({ id: 'ext' })

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { fetchMissionProjectTree, type ProjectTreeNode } from '../api/launchpad'
+import { useAppPreferences } from '../context/AppPreferencesContext'
 import {
   ensureMissionMonacoShiki,
   missionMonacoTheme,
@@ -93,6 +94,7 @@ type Props = {
 }
 
 export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
+  const { useSyntaxHighlighting } = useAppPreferences()
   const [tree, setTree] = useState<ProjectTreeNode | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [treeErr, setTreeErr] = useState<string | null>(null)
@@ -147,6 +149,9 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
       return next
     })
   }, [])
+
+  const editorLanguage =
+    selectedRel && useSyntaxHighlighting ? missionResourceLanguage(selectedRel) : 'plaintext'
 
   const openFile = useCallback(
     async (rel: string) => {
@@ -276,7 +281,7 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
                   <Editor
                     height="100%"
                     theme={missionMonacoTheme}
-                    language={missionResourceLanguage(selectedRel)}
+                    language={editorLanguage}
                     value={fileContent}
                     onChange={(v) => {
                       setFileContent(v ?? '')
