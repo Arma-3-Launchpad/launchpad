@@ -197,7 +197,7 @@ jobs:
           fetch-depth: 0
 
       - name: Build and upload installer assets
-        uses: ./.github/actions/publish-deliverables.yml
+        uses: ./.github/actions/publish-deliverables
         with:
           version: ${{ needs.version.outputs.new_version }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -216,7 +216,7 @@ jobs:
           ref: main
           fetch-depth: 0
       - name: Build and upload installer assets
-        uses: ./.github/actions/publish-deliverables.yml
+        uses: ./.github/actions/publish-deliverables
         with:
           version: ${{ needs.version.outputs.new_version }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

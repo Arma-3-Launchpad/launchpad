@@ -8,6 +8,13 @@ inputs:
   github_token:
     description: GitHub token used by gh release upload
     required: true
+  platform:
+    description: Target platform (windows or linux)
+    required: true
+  architecture:
+    description: Target architecture (x64)
+    required: false
+    default: x64
 
 runs:
   using: composite
@@ -43,7 +50,7 @@ runs:
       shell: bash
       run: python build.py
 
-    - name: Build Windows installer
+    - name: Build Electron installers
       shell: bash
       run: |
         set -euo pipefail
@@ -58,12 +65,25 @@ runs:
       run: |
         set -euo pipefail
         TAG="v${{ inputs.version }}"
-        BASE="$GITHUB_WORKSPACE/build/electron-forge-release/make/squirrel.windows/x64"
+        ARCH="${{ inputs.architecture }}"
+        PLATFORM="${{ inputs.platform }}"
+        OUT="$GITHUB_WORKSPACE/build/electron-forge-release/make"
         shopt -s nullglob
-        FILES=("$BASE"/*.exe "$BASE"/*.nupkg "$BASE"/RELEASES)
-        if [ "${#FILES[@]}" -eq 0 ]; then
-          echo "No installer assets found under $BASE"
+
+        FILES=()
+        if [ "$PLATFORM" = "windows" ]; then
+          BASE="$OUT/squirrel.windows/$ARCH"
+          FILES=("$BASE"/*.exe "$BASE"/*.nupkg "$BASE"/RELEASES)
+        elif [ "$PLATFORM" = "linux" ]; then
+          FILES=("$OUT/deb/$ARCH"/*.deb "$OUT/rpm/$ARCH"/*.rpm)
+        else
+          echo "Unsupported platform: $PLATFORM"
           exit 1
         fi
-        gh release upload "$TAG" "${FILES[@]}" --clobber
 
+        if [ "${#FILES[@]}" -eq 0 ]; then
+          echo "No installer assets found for platform=$PLATFORM arch=$ARCH under $OUT"
+          exit 1
+        fi
+
+        gh release upload "$TAG" "${FILES[@]}" --clobber
