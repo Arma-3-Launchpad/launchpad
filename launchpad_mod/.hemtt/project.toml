@@ -1,0 +1,10 @@
+name = "A3 Mission Launchpad API"
+mainprefix = "z"
+prefix = "a3_launchpad_ext_core"
+
+[version]
+major = 0
+minor = 0
+patch = 1
+build = 0
+git_hash = 0

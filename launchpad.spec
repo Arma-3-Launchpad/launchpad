@@ -1,16 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Portable onedir build: COLLECT ``name=""`` puts the app directly under ``--distpath`` (e.g. ``bin/``).
-# Prerequisite: ``npm run build`` in ``launchpad_client`` so ``launchpad_client/dist`` exists.
-# Splash: ``launchpad_client/src/assets/hero.png`` (PNG; avoid #ff00ff on Windows — reserved for transparency).
+# Primary cross-platform desktop bundle: PyInstaller onedir (see ``python package.py package``).
+# COLLECT ``name=""`` puts the app directly under ``--distpath`` (e.g. ``A3LaunchPad/bin/``).
+# Prerequisite: ``npm run build`` in ``launchpad_client/renderer``; static UI is copied to ``A3LaunchPad/web_dist/``
+# by ``package.py`` (not bundled under ``_internal``).
+# Splash: ``icon.png`` at repo root (PNG; avoid #ff00ff on Windows — reserved for transparency).
 # EXE icon: ``icon.png`` at repo root is converted to ``build/_launchpad_exe.ico`` (Windows requires .ico; Pillow).
 import os
 
 _spec_dir = os.path.dirname(os.path.abspath(SPEC))
-_launchpad = os.path.join(_spec_dir, "launchpad")
+_launchpad = os.path.join(_spec_dir, "launchpad_server")
 _entry = os.path.join(_launchpad, "__main__.py")
 _config = os.path.join(_launchpad, "config.json")
-_client_dist = os.path.join(_spec_dir, "launchpad_client", "dist")
-_splash_img = os.path.join(_spec_dir, "launchpad_client", "src", "assets", "hero.png")
+_splash_img = os.path.join(_spec_dir, "icon.png")
 
 
 def _build_exe_icon_ico(spec_dir: str) -> str:
@@ -48,7 +49,6 @@ a = Analysis(
     binaries=[],
     datas=[
         (_config, "."),
-        (_client_dist, "web_dist"),
     ],
     hiddenimports=["thirdparty.a3lib"],
     hookspath=[],
@@ -74,7 +74,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="A3MissionLaunchpad",
+    name="A3MissionLaunchpadPython",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

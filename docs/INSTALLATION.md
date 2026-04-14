@@ -15,13 +15,14 @@ This document will guide you through setting up the development environment for 
    python -m venv venv
    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
    ```
-4. **Install Dependencies**: Once the virtual environment is activated, install the required dependencies:
+4. **Install Dependencies**: Once the virtual environment is activated, install the server dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -r launchpad_server/requirements.txt
    ```
+   To run **PyInstaller** packaging locally, also install `pip install pyinstaller Pillow` (Pillow converts `icon.png` to `.ico` on Windows; see `package.py` preflight).
 5. **Run the Application**: You can start the application with:
    ```bash
-   python launchpad
+   python -m launchpad_server
    ```
 
 ## Portable Binary Usage
@@ -53,19 +54,23 @@ For users who prefer not to set up a development environment, a portable binary 
 
 1. Clone the repo or download it as an archive via the github website.
 
-2. Jump into the repo directory then run the packaging CLI
+2. Build the web client, then run the packaging CLI (PyInstaller **onedir** into `A3LaunchPad/bin/`).
 
    Windows
    ```bash
    cd a3-mission-launchpad
-   python package.py build
+   cd launchpad_client/renderer && npm ci && npm run build && cd ../..
+   python package.py package
    ```
 
-   Linux/MacOS
+   Linux/macOS
    ```bash
    cd a3-mission-launchpad
-   python3 package.py build
+   cd launchpad_client/renderer && npm ci && npm run build && cd ../..
+   python3 package.py package
    ```
+
+   The subcommand `build` is an alias for `package` (same PyInstaller step). Requirements: PyInstaller on `PATH`, Pillow for the Windows `.ico`, and `launchpad_client/renderer/dist` present (see `package.py` preflight).
    
 ---
 

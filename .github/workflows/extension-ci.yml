@@ -1,0 +1,43 @@
+# Build and smoke-test the Arma native extension on Linux when extension sources change.
+name: Extension CI
+
+on:
+  pull_request:
+    paths:
+      - "launchpad_mod/extension/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "launchpad_mod/extension/**"
+  workflow_dispatch:
+
+concurrency:
+  group: extension-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (CMake + CTest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: launchpad_mod/extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential ninja-build cmake python3
+
+      - name: Configure (Ninja, Release)
+        run: cmake -B ci-build -G Ninja -S . -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build ci-build --parallel "$(nproc)"
+
+      - name: CTest (smoke load + healthCheck callback)
+        run: ctest --test-dir ci-build --output-on-failure --no-tests=error

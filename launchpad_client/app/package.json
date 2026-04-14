@@ -1,0 +1,53 @@
+{
+  "name": "a3-mission-launchpad",
+  "productName": "a3-mission-launchpad",
+  "version": "1.0.0",
+  "description": "A3 Mission Launchpad",
+  "main": ".vite/build/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n backend,electron \"npm run dev:backend\" \"wait-on tcp:127.0.0.1:8111 && npm run dev:electron:inspect\"",
+    "dev:backend": "node ../scripts/run-launchpad-backend.mjs",
+    "dev:electron": "electron-forge start",
+    "dev:electron:inspect": "electron-forge start -- --inspect=9229 --remote-debugging-port=9222",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "echo \"No linting configured\""
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
+    "@electron-forge/cli": "^7.5.0",
+    "@electron-forge/maker-deb": "^7.5.0",
+    "@electron-forge/maker-rpm": "^7.5.0",
+    "@electron-forge/maker-squirrel": "^7.5.0",
+    "@electron-forge/maker-zip": "^7.5.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.5.0",
+    "@electron-forge/plugin-fuses": "^7.5.0",
+    "@electron-forge/plugin-vite": "^7.11.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "concurrently": "^9.1.2",
+    "@electron/fuses": "^1.8.0",
+    "babel-loader": "^9.2.1",
+    "clean-webpack-plugin": "^4.0.0",
+    "electron": "^33.2.0",
+    "electron-reload": "^2.0.0-alpha.1",
+    "express": "^4.21.1",
+    "sqlite3": "^5.1.7",
+    "vite": "^6.3.5",
+    "wait-on": "^8.0.1",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4"
+  },
+  "keywords": [],
+  "author": {
+    "name": "hostinfodev",
+    "email": "50676042+a3r0id@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1"
+  }
+}

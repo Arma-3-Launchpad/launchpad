@@ -27,9 +27,16 @@ dist-ssr
 *.sln
 *.sw?
 
+
 # Runtime things
 launchpad_data
-bin/launchpad_data
+A3LaunchPad/bin/launchpad_data
+A3LaunchPad/bin/_internal/
+A3LaunchPad/web_dist/
+A3LaunchPad/app/
+A3LaunchPad/launchpad_data/
 
-# Build things
 build/
+
+.vite/
+launchpad_client/renderer/deps/

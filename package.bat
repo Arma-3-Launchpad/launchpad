@@ -1,6 +1,5 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo DEPRECATED: use  python package.py build
-python "%~dp0package.py" build
+python package.py %*
 exit /b %ERRORLEVEL%
