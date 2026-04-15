@@ -6,6 +6,16 @@ import started from 'electron-squirrel-startup';
 import MENU_TEMPLATE from './menu.json';
 import CONFIG from '../config.json';
 
+const { updateElectronApp, UpdateSourceType } = require('update-electron-app')
+updateElectronApp({
+  updateSource: {
+    type: UpdateSourceType.ElectronPublicUpdateService,
+    repo: 'a3r0id/a3-mission-launchpad'
+  },
+  updateInterval: '1 hour',
+  logger: require('electron-log')
+})
+
 if (started) {
   app.quit();
 }
@@ -336,7 +346,7 @@ class Main {
 		const exePath = path.join(binDir, exeName);
 		if (!fs.existsSync(exePath)) {
 		console.error(
-			'[Launchpad] Backend not found. From the repo root run: python package.py package',
+			'[Launchpad] Backend not found. From the repo root run: python util.py --build',
 		);
 		return;
 		}

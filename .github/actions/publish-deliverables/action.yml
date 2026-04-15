@@ -51,7 +51,7 @@ runs:
 
     - name: Build project deliverables
       shell: bash
-      run: python build.py
+      run: python util.py --build
 
     - name: Build Electron installers
       shell: bash

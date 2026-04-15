@@ -1,6 +1,6 @@
 @echo off
 setlocal
 cd ..
-python package.py package
+python util.py --build
 cd scripts
 exit /b %ERRORLEVEL%

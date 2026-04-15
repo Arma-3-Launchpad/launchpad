@@ -11,7 +11,7 @@ const extraResource = [];
 if (fs.existsSync(launchpadFrozenBin)) extraResource.push(launchpadFrozenBin);
 if (fs.existsSync(launchpadWebDist)) extraResource.push(launchpadWebDist);
 
-/** Set by ``package.py`` to a fresh ``build/electron-forge-*`` path so Windows never has to delete a locked ``app/out`` tree. */
+/** Set by ``util.py`` to a fresh ``build/electron-forge-*`` path so Windows never has to delete a locked ``app/out`` tree. */
 const outDir = process.env.LAUNCHPAD_ELECTRON_OUT
   ? path.resolve(process.env.LAUNCHPAD_ELECTRON_OUT)
   : 'out';

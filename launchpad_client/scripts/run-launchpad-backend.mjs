@@ -4,7 +4,7 @@
  * Order of preference:
  * 1. ``LAUNCHPAD_BACKEND_EXE`` — full path to the PyInstaller binary (or any server exe).
  * 2. PyInstaller onedir under the repo: ``A3LaunchPad/bin/A3MissionLaunchpadPython``
- *    / ``A3LaunchPad/bin/A3MissionLaunchpadPython.exe`` (run ``python package.py package`` after client build).
+ *    / ``A3LaunchPad/bin/A3MissionLaunchpadPython.exe`` (run ``python util.py --build`` after client build).
  * 3. Interpreter: ``LAUNCHPAD_PYTHON`` (or ``python`` / ``python3``) with ``python -m launchpad_server``
  *    from the repo root. Set ``LAUNCHPAD_USE_PYTHON=1`` to force this even if a frozen exe exists.
  */

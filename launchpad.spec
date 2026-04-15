@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Primary cross-platform desktop bundle: PyInstaller onedir (see ``python package.py package``).
+# Primary cross-platform desktop bundle: PyInstaller onedir (see ``python util.py --build``).
 # COLLECT ``name=""`` puts the app directly under ``--distpath`` (e.g. ``A3LaunchPad/bin/``).
 # Prerequisite: ``npm run build`` in ``launchpad_client/renderer``; static UI is copied to ``A3LaunchPad/web_dist/``
-# by ``package.py`` (not bundled under ``_internal``).
+# by ``util.py`` (not bundled under ``_internal``).
 # EXE icon: ``icon.png`` at repo root is converted to ``build/_launchpad_exe.ico`` (Windows requires .ico; Pillow).
 import os
 
