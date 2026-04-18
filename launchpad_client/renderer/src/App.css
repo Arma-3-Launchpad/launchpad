@@ -1403,6 +1403,12 @@
   max-width: 36ch;
 }
 
+.mission-resource-preview-fallback {
+  flex: 1;
+  min-height: 200px;
+  justify-content: center;
+}
+
 .mission-resource-editor-body {
   flex: 1;
   display: flex;
@@ -1507,6 +1513,70 @@
 .mission-resource-monaco:focus-within {
   border-color: var(--accent);
   box-shadow: var(--focus);
+}
+
+/* Decoded texture / image preview (resource browser) */
+.mission-resource-editor-editor-stack--image {
+  min-height: 200px;
+}
+
+.mission-resource-editor-editor-stack--mesh {
+  min-height: 280px;
+}
+
+.mission-p3d-preview-canvas-wrap {
+  width: 100%;
+  flex: 1;
+  min-height: 280px;
+}
+
+.mission-image-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  overflow: auto;
+}
+
+.mission-image-preview:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+.mission-image-preview-frame {
+  margin: auto;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: min(100%, 240px);
+  background: repeating-conic-gradient(#2a2a2e 0% 25%, #1e1e22 0% 50%) 50% / 16px 16px;
+}
+
+@media (prefers-color-scheme: light) {
+  .mission-image-preview-frame {
+    background: repeating-conic-gradient(#e8e8ec 0% 25%, #dddde2 0% 50%) 50% / 16px 16px;
+  }
+}
+
+.mission-image-preview-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.mission-tree-busy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
 }
 
 .mission-resource-problems {
