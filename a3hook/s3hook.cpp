@@ -1,5 +1,9 @@
 /**
-	Cross-platform tool to hook into the Arma 3 runtime process (battleeye disabled!!! - This is strictly for development purposes only!)
+	Cross-platform tool to connect with the Arma 3 runtime process (BattleEye disabled - intended for development use only).
+
+	Note:
+	- I'm attempting to grab the arma 3 window and pull it into our Launchpad window, similar to Arma Reforger's Enfusion workbench.
+	- Mem dump stuff is just experimental for now.
 
 	Usage: ./a3hook -h or ./a3hook --help
 	Flags Examples:
@@ -10,9 +14,9 @@
 			memdump: Write a minidump (.dmp) of the process (Windows: dbghelp). Set A3HOOK_FULL_MINIDUMP=1 for MiniDumpWithFullMemory (very large).
 			Example: ./a3hook {arma 3 process id} memdump {output file path}
 
-		- Hijack Window:
-			hijack: Reparent the target's largest visible top-level window into the owner process's main window (SetParent). Windows only.
-			Example: ./a3hook {arma 3 process id} hijack {our process id}
+		- Attach Window:
+			attach: Reparent the target's largest visible top-level window into the owner process's main window (SetParent). Windows only.
+			Example: ./a3hook {arma 3 process id} attach {our process id}
 */
 
 #include <cstdio>
@@ -55,10 +59,10 @@ static void printHelp() {
 	std::cout
 	    << "a3hook (development only)\n"
 	    << "  -h, --help              Show this help\n"
-	    << "  <pid> memdump <file>    Write a minidump (.dmp). Windows: dbghelp. Optional env A3HOOK_FULL_MINIDUMP=1 for full memory (huge).\n"
-		<< "  <pid> hijack <ownPid>   Reparent target's main window into owner's main window (Windows).\n"
+	    << "  <pid> memdump <file>    Write a minidump (.dmp). Windows: dbghelp. Optional env A3HOOK_FULL_MINIDUMP=1 for full memory (large file).\n"
+		<< "  <pid> attach <ownPid>   Reparent the target main window into the owner main window (Windows; alias: hijack).\n"
 	    << "\n"
-	    << "Hijack hints (borderless / ignored launcher window mode is common):\n"
+	    << "Attach hints (borderless / ignored launcher window mode is common):\n"
 	    << "  A3HOOK_LIST_WINDOWS=1   Log top-level HWNDs for each PID before picking.\n"
 	    << "  A3HOOK_TARGET_HWND=0x..  Force target HWND (must belong to target PID).\n"
 	    << "  A3HOOK_OWNER_HWND=0x..   Force owner host HWND (must belong to owner PID).\n";
@@ -440,22 +444,22 @@ static bool writeMemoryMinidump(unsigned long pid, const std::filesystem::path& 
 	return true;
 }
 
-static bool hijackWindow(unsigned long targetPid, unsigned long ownerPid) {
+static bool attachWindow(unsigned long targetPid, unsigned long ownerPid) {
 	if (targetPid == ownerPid) {
-		logError("hijack: target and owner PIDs must differ.");
+		logError("attach: target and owner PIDs need to be different.");
 		return false;
 	}
 
 	HWND targetHw = resolveTargetWindow(static_cast<DWORD>(targetPid));
 	HWND parentHw = resolveOwnerWindow(static_cast<DWORD>(ownerPid));
 	if (!targetHw) {
-		logError("Could not find a suitable window for target PID " + std::to_string(targetPid) + ".");
+		logError("Couldn't find a suitable window for target PID " + std::to_string(targetPid) + ".");
 		logInfo("Confirm the PID is the game (e.g. arma3_x64.exe), not a launcher. "
 		        "Try A3HOOK_LIST_WINDOWS=1 for a full HWND list, or A3HOOK_TARGET_HWND=0x...");
 		return false;
 	}
 	if (!parentHw) {
-		logError("Could not find a suitable window for owner PID " + std::to_string(ownerPid) + ".");
+		logError("Couldn't find a suitable window for owner PID " + std::to_string(ownerPid) + ".");
 		logInfo("Try: A3HOOK_OWNER_HWND=0x... for the host window.");
 		return false;
 	}
@@ -487,7 +491,7 @@ static bool hijackWindow(unsigned long targetPid, unsigned long ownerPid) {
 	SetWindowPos(targetHw, nullptr, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED);
 	ShowWindow(targetHw, SW_SHOW);
 
-	logInfo("Reparented target window into owner. Resize the owner window manually if needed.");
+	logInfo("Attached target window to owner. Resize the owner window manually if needed.");
 	return true;
 }
 
@@ -500,10 +504,10 @@ static bool writeMemoryMinidump(unsigned long pid, const std::filesystem::path& 
 	return false;
 }
 
-static bool hijackWindow(unsigned long targetPid, unsigned long ownerPid) {
+static bool attachWindow(unsigned long targetPid, unsigned long ownerPid) {
 	(void)targetPid;
 	(void)ownerPid;
-	logError("hijack is only implemented on Windows.");
+	logError("attach is only implemented on Windows.");
 	return false;
 }
 
@@ -536,15 +540,15 @@ int main(int argc, char** argv) {
 		const std::filesystem::path outPath(argv[3]);
 		return writeMemoryMinidump(targetPid, outPath) ? 0 : 3;
 	}
-	if (cmd == "hijack") {
+	if (cmd == "attach" || cmd == "hijack") {
 		unsigned long ownerPid = 0;
 		if (!parsePid(argv[3], ownerPid)) {
 			logError("Invalid owner process id: " + std::string(argv[3]));
 			return 2;
 		}
-		return hijackWindow(targetPid, ownerPid) ? 0 : 3;
+		return attachWindow(targetPid, ownerPid) ? 0 : 3;
 	}
 
-	logError("Unknown subcommand: " + cmd);
+	logError("Unrecognized subcommand: " + cmd);
 	return 3;
 }

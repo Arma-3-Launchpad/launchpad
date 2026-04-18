@@ -1,6 +1,6 @@
 import type { MlodFace, MlodLod, P3D } from './p3d';
 
-/** Interleaved XYZ per vertex, Arma space (Z-up). */
+/** Interleaved XYZ per vertex: modeling space (Y vertical, XZ horizontal), same as Three.js. */
 export type PreviewMesh = {
   positions: Float32Array;
   indices: Uint32Array;
@@ -21,9 +21,9 @@ export type PreviewMeshResult =
   | { ok: true; mesh: PreviewMesh }
   | { ok: false; error: string };
 
-/** Map Arma model space (Z-up) to Three.js (Y-up). */
+/** Pass-through: MLOD/ODOL vertices are already Y-up (XZ ground plane), matching the preview renderer. */
 export function armaVecToThree(x: number, y: number, z: number): [number, number, number] {
-  return [x, z, -y];
+  return [x, y, z];
 }
 
 function normalize3(x: number, y: number, z: number): [number, number, number] {
