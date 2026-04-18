@@ -184,42 +184,42 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-deliverables-windows:
-    name: Build and publish Release (Windows x64)
-    # runs-on: windows-latest
-    runs-on: [self-hosted, windows]
-    needs: [version, persist-version, release]
-    if: needs.version.outputs.version_bumped == 'true'
-    steps:
-      - name: Checkout main (with version bump commit)
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
+  # publish-deliverables-windows:
+  #   name: Build and publish Release (Windows x64)
+  #   # runs-on: windows-latest
+  #   runs-on: [self-hosted, windows]
+  #   needs: [version, persist-version, release]
+  #   if: needs.version.outputs.version_bumped == 'true'
+  #   steps:
+  #     - name: Checkout main (with version bump commit)
+  #       uses: actions/checkout@v4
+  #       with:
+  #         ref: main
+  #         fetch-depth: 0
 
-      - name: Build and upload installer assets
-        uses: ./.github/actions/publish-deliverables
-        with:
-          version: ${{ needs.version.outputs.new_version }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          platform: windows
-          architecture: x64
+  #     - name: Build and upload installer assets
+  #       uses: ./.github/actions/publish-deliverables
+  #       with:
+  #         version: ${{ needs.version.outputs.new_version }}
+  #         github_token: ${{ secrets.GITHUB_TOKEN }}
+  #         platform: windows
+  #         architecture: x64
 
-  publish-deliverables-linux:
-    name: Build and publish Release (Linux x64)
-    runs-on: [self-hosted, linux]
-    needs: [version, persist-version, release]
-    if: needs.version.outputs.version_bumped == 'true'
-    steps:
-      - name: Checkout main (with version bump commit)
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-      - name: Build and upload installer assets
-        uses: ./.github/actions/publish-deliverables
-        with:
-          version: ${{ needs.version.outputs.new_version }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          platform: linux
-          architecture: x64
+  # publish-deliverables-linux:
+  #   name: Build and publish Release (Linux x64)
+  #   runs-on: [self-hosted, linux]
+  #   needs: [version, persist-version, release]
+  #   if: needs.version.outputs.version_bumped == 'true'
+  #   steps:
+  #     - name: Checkout main (with version bump commit)
+  #       uses: actions/checkout@v4
+  #       with:
+  #         ref: main
+  #         fetch-depth: 0
+  #     - name: Build and upload installer assets
+  #       uses: ./.github/actions/publish-deliverables
+  #       with:
+  #         version: ${{ needs.version.outputs.new_version }}
+  #         github_token: ${{ secrets.GITHUB_TOKEN }}
+  #         platform: linux
+  #         architecture: x64
