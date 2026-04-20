@@ -308,8 +308,8 @@ export function ArmaProcessMonitor() {
       {rows.length === 0 && !pollErr ? (
         <div className="proc-empty">
           <div className="proc-empty-icon" aria-hidden />
-          <p className="proc-empty-title">No game process yet</p>
-          <p className="proc-empty-hint">Launch from above and this board lights up automatically.</p>
+          <p className="proc-empty-title">No Arma 3 runtime processes detected</p>
+          {/* <p className="proc-empty-hint">Launch from above and this board lights up automatically.</p> */}
         </div>
       ) : (
         <div className="proc-card-grid">{cards}</div>

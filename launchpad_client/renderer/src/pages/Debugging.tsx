@@ -285,7 +285,7 @@ export function DebuggingPage() {
       <section className="card form-card">
         <h2 className="card-title">Command console</h2>
         <div className="testing-launch-grid">
-          <label className="field">
+          <label className="field" style={{ width: '100%' }}>
             <span className="field-label">Command type</span>
             <select className="field-input" value={commandType} onChange={(e) => setCommandType(e.target.value)}>
               <option value="ping">ping</option>
@@ -296,7 +296,7 @@ export function DebuggingPage() {
               <option value="custom">custom</option>
             </select>
           </label>
-          <label className="field">
+          <label className="field" style={{ width: '100%' }}>
             <span className="field-label">Payload (JSON object)</span>
             <textarea
               className="field-input testing-textarea"
