@@ -19,7 +19,9 @@ Currently, the project is heavily based on mission-making, but is leaning in the
 
 This project is not currently ready for end users. I'm making it public now in hopes of rallying some contributors to make it more of a community tool.
 
-[Discord Server](https://discord.gg/MPVbE5B56q)
+Join the discussion in our [Discord Server](https://discord.gg/MPVbE5B56q).
+
+Looking to contribute? Check out our [Contribution Info](./docs/CONTRIBUTING.md) to get started.
 
 ---
 
