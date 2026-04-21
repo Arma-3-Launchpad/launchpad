@@ -1,70 +1,60 @@
-# Installation Instructions
+# Installation
 
-This document will guide you through setting up the Electron development environment and packaging the desktop app.
+Launchpad is a **desktop Electron app**. There is no separate Python server in this repository—the UI talks to the main process over **IPC** for filesystem, Arma launch, builds, and related features.
 
-> [!NOTE]
-> Major refactor update: desktop features are being migrated from Python HTTP endpoints to Electron IPC handlers. The renderer now uses IPC-first calls in desktop mode, with HTTP fallback only where explicitly retained.
+## Choose your path
 
-## Desktop Development Setup
+| Goal | Where to look |
+|------|----------------|
+| **Clone, build, package, and optional companion mod/extension** | **[Installing from source](SOURCE_INSTALL.md)** (full walkthrough) |
+| **Quick local development** | [Development (short)](#development-short) below |
+| **Problems** | [Troubleshooting](TROUBLESHOOTING.md) |
 
-1. **Prerequisites**: Install Node.js (current LTS recommended).
-2. **Clone the Repository**: Run the following command to clone the repo to your local machine.
-   ```bash
-   git clone https://github.com/a3r0id/a3-mission-launchpad.git
-   cd a3-mission-launchpad
-   ```
-3. **Install renderer dependencies and build**:
+## Prerequisites
+
+- **Node.js** (current **LTS** recommended) and **npm**
+- **Git** (for source installs)
+- **Arma 3** (Steam) for real-world testing of missions, mods, and launches
+
+Optional, depending on what you build locally:
+
+- **HEMTT** — companion mod under `launchpad_mod`
+- **CMake 3.21+** and a **64-bit** C++ compiler — native RV extension under `launchpad_mod/extension`
+- **Python 3** — only if you use **`util.py`** for release-style staging (`python util.py --build`)
+
+## Development (short)
+
+1. Clone the repo (see [SOURCE_INSTALL.md](SOURCE_INSTALL.md) for details).
+2. Install dependencies and run the app in **dev mode** (Vite + Electron):
+
    ```bash
    cd launchpad_client/renderer
    npm ci
-   npm run build
-   ```
-4. **Install Electron app dependencies and run**:
-   ```bash
+
    cd ../app
    npm ci
    npm run dev
    ```
-## Packaging
 
-For users who prefer not to set up a development environment, a portable binary is available.
+`npm run dev` uses **Electron Forge** with the Vite plugin: the renderer is served from the dev server, so you usually **do not** need `npm run build` in the renderer while iterating on the UI.
+
+For packaging, staging **`A3LaunchPad`**, HEMTT, the extension, and **`util.py`**, follow **[SOURCE_INSTALL.md](SOURCE_INSTALL.md)**.
+
+## Packaged installs and releases
+
+Prebuilt artifacts may be published on the project’s **[GitHub Releases](https://github.com/a3r0id/a3-mission-launchpad/releases)** page when maintainers ship a version.
 
 > [!IMPORTANT]
-> Packaged builds are unsigned and may be flagged by antivirus/smart screen on some systems.
+> Local and CI-built binaries are typically **unsigned**. Windows **SmartScreen** or antivirus may warn or block the first run. Allow only if you trust the source (official release or your own build).
 
-**Install from GitHub**
+To **build an installer or portable bundle yourself**, use `npm run package` or `npm run make` from `launchpad_client/app` after a renderer production build and any **`A3LaunchPad`** staging you need—see [SOURCE_INSTALL.md](SOURCE_INSTALL.md).
 
-1. Clone the repo or download it as an archive via the github website.
+## First launch
 
-2. Build the renderer and package the Electron app.
+After the app starts, open **Settings** and set at least the **Arma 3 install path**. Optionally set **Workshop folder** and profile paths so launches, imports, and mod resolution match your machine.
 
-   ```bash
-   cd a3-mission-launchpad
-   cd launchpad_client/renderer
-   npm ci
-   npm run build
-   cd ../app
-   npm ci
-   npm run package
-   ```
+State files (settings, managed missions, logs, etc.) live under a per-user **`launchpad_data`** folder; see [SOURCE_INSTALL.md § First-run data](SOURCE_INSTALL.md#8-first-run-data-and-settings).
 
-**Build your own executable**
+## Contributing
 
-1. Clone the repo or download it as an archive via the github website.
-
-2. Build and package from the Electron app.
-
-   ```bash
-   cd a3-mission-launchpad
-   cd launchpad_client/renderer
-   npm ci
-   npm run build
-   cd ../app
-   npm ci
-   npm run package
-   ```
-
-   Requirements: Node/npm and platform build toolchain requirements used by Electron Forge.
-
-
-Feel free to reach out if you encounter any issues or have questions!
+See [Contributing](CONTRIBUTING.md) for architecture expectations, IPC conventions, and review rules.

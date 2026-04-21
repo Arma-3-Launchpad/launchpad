@@ -2,7 +2,7 @@
 
 Thank you for helping with **A3 Launchpad**. The desktop product is an **Electron** app: the UI runs in a Chromium renderer, and privileged work (filesystem, processes, Arma launch, HEMTT, and the companion native extension) runs in the **main process** behind **IPC**.
 
-For install and packaging steps, see [Installation](INSTALLATION.md). For where features moved during the IPC migration, see [refactor.md](../refactor.md) in the repo root.
+For install and packaging steps, see [Installation](INSTALLATION.md) and the full [Installing from source](SOURCE_INSTALL.md) guide. For where features moved during the IPC migration, see [refactor.md](../refactor.md) in the repo root.
 
 ## Repository layout
 
