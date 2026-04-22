@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppPreferencesDialog } from './components/AppPreferencesDialog'
-import { Sidebar } from './components/Sidebar'
+import { AppSidebar, type NavId } from './components/AppSidebar'
 import { SplashScreen } from './components/SplashScreen'
 import { AppPreferencesProvider } from './context/AppPreferencesContext'
 import { getElectronIpc } from './electronIpc'
@@ -13,13 +13,17 @@ import { LoggingPage } from './pages/Logging'
 import { DebuggingPage } from './pages/Debugging'
 import './App.less'
 
-type NavId = 'home' | 'managed-missions' | 'managed-mod-projects' | 'testing' | 'debugging' | 'logging' | 'settings'
-
 type MenuEventPayload = { event?: string }
 
 export default function App() {
   const [page, setPage] = useState<NavId>('home')
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [settingsKeepAlive, setSettingsKeepAlive] = useState(false)
+
+  const openSettings = () => {
+    setSettingsKeepAlive(true)
+    setPage('settings')
+  }
 
   useEffect(() => {
     const ipc = getElectronIpc()
@@ -40,20 +44,25 @@ export default function App() {
     <AppPreferencesProvider>
       <SplashScreen />
       <div className="app-shell">
-        <Sidebar
+        <AppSidebar
           active={page}
           onSelect={(id) => {
+            if (id === 'settings') setSettingsKeepAlive(true)
             setPage(id)
           }}
         />
         <div className="shell-main">
           <main className="shell-content" id="main">
+            {settingsKeepAlive ? (
+              <div hidden={page !== 'settings'}>
+                <SettingsPage />
+              </div>
+            ) : null}
             {page === 'home' && (
-              <HomePage onGoMission={() => setPage('managed-missions')} onGoSettings={() => setPage('settings')} />
+              <HomePage onGoMission={() => setPage('managed-missions')} onGoSettings={openSettings} />
             )}
-            {page === 'settings' && <SettingsPage />}
             {page === 'managed-missions' && (
-              <MissionListPage onOpenSettings={() => setPage('settings')} />
+              <MissionListPage onOpenSettings={openSettings} />
             )}
             {page === 'managed-mod-projects' && <ModProjectsPage />}
             {page === 'testing' && <TestingPage />}

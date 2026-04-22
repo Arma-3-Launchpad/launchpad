@@ -36,7 +36,8 @@ export function bootstrapDataDirectory(ctx: Launchpad) {
                 "github_new_repo_visibility": "private",
                 "remote_servers": [],
                 "logs_remote_default_server_id": "",
-                "logs_remote_default_folder": "/home/steam/arma3"
+                "logs_remote_default_folder": "/home/steam/arma3",
+                "hemtt_path": ""
             }
         ));
         console.log(`Created settings file at ${settingsFile}`);

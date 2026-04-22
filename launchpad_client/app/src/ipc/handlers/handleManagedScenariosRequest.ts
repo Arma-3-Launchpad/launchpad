@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import Launchpad from '../../Launchpad';
+import { syncManagedMissionsFromProfileHub } from './syncManagedMissionsFromProfileHub';
 
 type ManagedScenarioRow = {
     id: string;
@@ -17,6 +18,7 @@ export async function handleManagedScenariosRequest(
     ctx: Launchpad,
     _event: Electron.IpcMainInvokeEvent
 ): Promise<ManagedScenarioRow[]> {
+    syncManagedMissionsFromProfileHub(ctx);
     const managedPath = ctx.managedMissionsFile;
     try {
         const raw = JSON.parse(fs.readFileSync(managedPath, 'utf8')) as Record<string, unknown>;

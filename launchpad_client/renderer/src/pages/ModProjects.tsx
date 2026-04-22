@@ -9,7 +9,7 @@ import {
   type ManagedModProject,
 } from '../api/launchpad'
 import Util from '../Util'
-import { ScriptEditorModal } from '../components/IntegratedScriptEditor'
+import { ScriptEditorModal } from '../components/Editor/IntegratedScriptEditor'
 
 export function ModProjectsPage() {
   const [projects, setProjects] = useState<ManagedModProject[]>([])

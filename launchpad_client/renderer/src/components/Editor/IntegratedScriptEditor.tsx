@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MissionResourceBrowser, type ScriptEditorEnvironment } from './MissionResourceBrowser'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCompress, faExpand } from '@fortawesome/free-solid-svg-icons'
+import { MissionResourceBrowser, type ScriptEditorEnvironment } from '../MissionResourceBrowser'
 
-export type { ScriptEditorEnvironment } from './MissionResourceBrowser'
+export type { ScriptEditorEnvironment } from '../MissionResourceBrowser'
 
 const SCRIPT_EDITOR_MIN_W = 520
 const SCRIPT_EDITOR_MIN_H = 340
@@ -66,6 +68,7 @@ export function ScriptEditorModal({
 }: ScriptEditorModalProps) {
   const lastFrameRef = useRef<{ w: number; h: number } | null>(null)
   const [frame, setFrame] = useState(() => ({ w: 960, h: 720 }))
+  const [fullscreen, setFullscreen] = useState(false)
   const resizeSession = useRef<{
     kind: 'e' | 's' | 'se'
     startX: number
@@ -78,6 +81,10 @@ export function ScriptEditorModal({
     if (!open) return
     const base = lastFrameRef.current ?? defaultScriptEditorFrame()
     setFrame(clampScriptEditorFrame(base.w, base.h))
+  }, [open])
+
+  useEffect(() => {
+    if (!open) setFullscreen(false)
   }, [open])
 
   const onResizePointerDown = useCallback((kind: 'e' | 's' | 'se') => {
@@ -123,20 +130,24 @@ export function ScriptEditorModal({
 
   return (
     <div
-      className="modal-root modal-root-stacked"
+      className={`modal-root modal-root-stacked${fullscreen ? ' script-editor-modal-root--fullscreen' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="script-editor-modal-title"
     >
       <button type="button" className="modal-backdrop" aria-label="Close dialog" onClick={() => onClose()} />
       <div
-        className="modal-dialog modal-dialog-wide mission-edit-dialog script-editor-modal-dialog"
-        style={{
-          width: frame.w,
-          height: frame.h,
-          maxWidth: 'calc(100vw - 48px)',
-          maxHeight: 'calc(100vh - 48px)',
-        }}
+        className={`modal-dialog modal-dialog-wide mission-edit-dialog script-editor-modal-dialog${fullscreen ? ' script-editor-modal-dialog--fullscreen' : ''}`}
+        style={
+          fullscreen
+            ? { width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none' }
+            : {
+                width: frame.w,
+                height: frame.h,
+                maxWidth: 'calc(100vw - 48px)',
+                maxHeight: 'calc(100vh - 48px)',
+              }
+        }
       >
         <header className="mission-edit-header">
           <div className="mission-edit-header-main">
@@ -145,34 +156,49 @@ export function ScriptEditorModal({
               {contextTitle.trim() || 'Project folder'}
             </h2>
           </div>
-          <button type="button" className="mission-edit-close" onClick={() => onClose()} aria-label="Close">
-            <span aria-hidden>×</span>
-          </button>
+          <div className="mission-edit-header-actions">
+            <button
+              type="button"
+              className="mission-edit-icon-btn"
+              onClick={() => setFullscreen((v) => !v)}
+              aria-pressed={fullscreen}
+              aria-label={fullscreen ? 'Use smaller window' : 'Use full window'}
+            >
+              <FontAwesomeIcon icon={fullscreen ? faCompress : faExpand} />
+            </button>
+            <button type="button" className="mission-edit-close" onClick={() => onClose()} aria-label="Close">
+              <span aria-hidden>×</span>
+            </button>
+          </div>
         </header>
         <div className="mission-edit-surface mission-edit-section-flush script-editor-modal-body">
           <IntegratedScriptEditor projectRoot={root} disabled={disabled} environment={environment} />
         </div>
-        <button
-          type="button"
-          className="script-editor-resize script-editor-resize-e"
-          aria-label="Resize width"
-          onPointerDown={onResizePointerDown('e')}
-          style={{ touchAction: 'none' }}
-        />
-        <button
-          type="button"
-          className="script-editor-resize script-editor-resize-s"
-          aria-label="Resize height"
-          onPointerDown={onResizePointerDown('s')}
-          style={{ touchAction: 'none' }}
-        />
-        <button
-          type="button"
-          className="script-editor-resize script-editor-resize-se"
-          aria-label="Resize window"
-          onPointerDown={onResizePointerDown('se')}
-          style={{ touchAction: 'none' }}
-        />
+        {!fullscreen && (
+          <>
+            <button
+              type="button"
+              className="script-editor-resize script-editor-resize-e"
+              aria-label="Resize width"
+              onPointerDown={onResizePointerDown('e')}
+              style={{ touchAction: 'none' }}
+            />
+            <button
+              type="button"
+              className="script-editor-resize script-editor-resize-s"
+              aria-label="Resize height"
+              onPointerDown={onResizePointerDown('s')}
+              style={{ touchAction: 'none' }}
+            />
+            <button
+              type="button"
+              className="script-editor-resize script-editor-resize-se"
+              aria-label="Resize window"
+              onPointerDown={onResizePointerDown('se')}
+              style={{ touchAction: 'none' }}
+            />
+          </>
+        )}
       </div>
     </div>
   )

@@ -5,6 +5,12 @@ import {
   type LaunchpadSettings,
   type MissionBuildResponse,
 } from '../api/launchpad'
+import {
+  ARMA_MAP_CHOICES,
+  ARMA_MAP_CUSTOM_ID,
+  armaMapChoiceBySuffix,
+  mapSelectIdForSuffix,
+} from '../lib/armamaps'
 
 type MissionBuildPageProps = {
   onGoSettings?: () => void
@@ -105,6 +111,8 @@ export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt }: Mi
   const missionNameTrim = form.mission_name.trim()
   const mapSuffixTrim = form.map_suffix.trim()
   const missionFullNamePreview = `${missionNameTrim || 'mission_name'}.${mapSuffixTrim || 'map_suffix'}`
+  const mapSelectId = mapSelectIdForSuffix(form.map_suffix)
+  const mapChoice = armaMapChoiceBySuffix(form.map_suffix)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -203,20 +211,48 @@ export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt }: Mi
         </label>
 
         <label className="field">
-          <span className="field-label">Map suffix</span>
-          <input
+          <span className="field-label">Map</span>
+          <select
             className="field-input"
-            name="map_suffix"
-            autoComplete="off"
-            placeholder="Altis"
-            value={form.map_suffix}
-            onChange={(ev) =>
-              setForm((f) => ({ ...f, map_suffix: ev.target.value }))
-            }
-          />
+            name="map_preset"
+            value={mapSelectId}
+            onChange={(ev) => {
+              const id = ev.target.value
+              if (id === ARMA_MAP_CUSTOM_ID) {
+                setForm((f) => ({ ...f, map_suffix: '' }))
+                return
+              }
+              const row = ARMA_MAP_CHOICES.find((m) => m.id === id)
+              if (row) setForm((f) => ({ ...f, map_suffix: row.worldSuffix }))
+            }}
+          >
+            {ARMA_MAP_CHOICES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.title} — {m.scaleLine}
+                {m.needsContent ? ` (needs ${m.needsContent})` : ''}
+              </option>
+            ))}
+            <option value={ARMA_MAP_CUSTOM_ID}>Other…</option>
+          </select>
+          {mapSelectId === ARMA_MAP_CUSTOM_ID ? (
+            <input
+              className="field-input"
+              style={{ marginTop: 8 }}
+              name="map_suffix"
+              autoComplete="off"
+              placeholder="World suffix, e.g. Takistan"
+              value={form.map_suffix}
+              onChange={(ev) => setForm((f) => ({ ...f, map_suffix: ev.target.value }))}
+            />
+          ) : null}
           <span className="field-hint">
-            Becomes{' '}
+            Mission folder will be{' '}
             <code className="shell-inline-code">{missionFullNamePreview}</code>.
+            {mapChoice ? (
+              <> {mapChoice.about}</>
+            ) : mapSelectId === ARMA_MAP_CUSTOM_ID ? (
+              <> Use the exact world name Arma uses after the dot in the mission folder.</>
+            ) : null}
           </span>
         </label>
 

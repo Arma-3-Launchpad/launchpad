@@ -4,6 +4,8 @@ import CONFIG from '../config.json';
 import path from 'node:path';
 import fs from 'node:fs';
 import { IPCAPI } from './ipc/IPCAPI';
+import { handleInstallHemttWinget } from './ipc/handlers/handleInstallHemttWinget';
+import { detectArmaPaths } from './arma/detectArmaPaths';
 import { bootstrapDataDirectory } from './bootstrap/bootstrapDataDirectory';
 import util from 'node:util';
 import { DebugSocketService } from './debug/DebugSocketService';
@@ -208,6 +210,11 @@ export default class Launchpad {
 
   // Register IPC handlers
   registerIpc() {
+    this.ipcAPI.registerIPC('detect-arma-paths', () => ({
+      ok: true as const,
+      paths: detectArmaPaths(app.getPath('documents')),
+    }));
+
     this.ipcAPI.registerIPC('checkForUpdates', async () => {
       const current = app.getVersion();
       try {
@@ -336,6 +343,10 @@ export default class Launchpad {
       await shell.openExternal(url);
       return { ok: true };
     });
+
+    this.ipcAPI.registerIPC('install-hemtt-winget', (event, args) =>
+      handleInstallHemttWinget(this, event, args),
+    );
 
     this.ipcAPI.registerIPC('getAppVersion', async () => {
       return { version: app.getVersion() };

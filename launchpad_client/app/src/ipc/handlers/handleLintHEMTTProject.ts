@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { IpcMainInvokeEvent } from 'electron';
 import Launchpad from '../../Launchpad';
+import { readHemttSpawnCommand } from './readHemttSpawnCommand';
 
 export type HemttDiagnosticSeverity = 'error' | 'warning' | 'info' | 'help';
 
@@ -44,9 +45,9 @@ function appendProcessText(chunk: Buffer, carry: string, onLine: (line: string) 
   return rest;
 }
 
-function runHemttCheck(projectRoot: string, logLines: string[]): Promise<number> {
+function runHemttCheck(projectRoot: string, logLines: string[], hemttCommand: string): Promise<number> {
   return new Promise((resolve, reject) => {
-    const child = spawn('hemtt', ['check'], {
+    const child = spawn(hemttCommand, ['check'], {
       cwd: projectRoot,
       windowsHide: true,
     });
@@ -195,10 +196,11 @@ export function parseHemttCheckOutput(projectRoot: string, lines: string[]): Hem
  * Runs ``hemtt check`` in the mod project root (read-only checks; see HEMTT Book).
  */
 export async function handleLintHEMTTProject(
-  _ctx: Launchpad,
+  ctx: Launchpad,
   _event: IpcMainInvokeEvent,
   args: unknown,
 ): Promise<LintModProjectHemttResponse> {
+  const hemttCommand = readHemttSpawnCommand(ctx.settingsFile);
   const body = (args ?? {}) as LintModProjectHemttPayload;
   const projectRaw = readProjectPath(body);
   if (!projectRaw) {
@@ -213,7 +215,7 @@ export async function handleLintHEMTTProject(
   const logLines: string[] = [];
   let exitCode = 1;
   try {
-    exitCode = await runHemttCheck(projectResolved, logLines);
+    exitCode = await runHemttCheck(projectResolved, logLines, hemttCommand);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === 'HEMTT') {
@@ -222,7 +224,10 @@ export async function handleLintHEMTTProject(
         code: 'hemtt_missing',
         diagnostics: [],
         log: logLines,
-        error: 'HEMTT is not installed or not on PATH (`hemtt` command not found).',
+        error:
+          hemttCommand === 'hemtt'
+            ? 'HEMTT was not found. Install it from the HEMTT site or set the program location in Settings.'
+            : 'HEMTT could not be started. Check the program path in Settings.',
       };
     }
     return {

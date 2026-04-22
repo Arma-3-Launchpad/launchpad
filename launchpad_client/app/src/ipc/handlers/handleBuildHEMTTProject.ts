@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { IpcMainInvokeEvent } from 'electron';
 import Launchpad from '../../Launchpad';
 import { ensureHemttProjectScaffold, isHemttProjectRoot } from './handleInitHEMTTProject';
+import { readHemttSpawnCommand } from './readHemttSpawnCommand';
 
 /** IPC body mirrors mission PBO build where it makes sense (paths, optional copy target, overwrite). */
 export type BuildModProjectHemttPayload = {
@@ -44,9 +45,9 @@ function appendProcessText(chunk: Buffer, carry: string, onLine: (line: string) 
   return rest;
 }
 
-function runHemttBuild(projectRoot: string, logLines: string[]): Promise<number> {
+function runHemttBuild(projectRoot: string, logLines: string[], hemttCommand: string): Promise<number> {
   return new Promise((resolve, reject) => {
-    const child = spawn('hemtt', ['build'], {
+    const child = spawn(hemttCommand, ['build'], {
       cwd: projectRoot,
       windowsHide: true,
     });
@@ -125,10 +126,11 @@ function resolveCopyDestination(projectRoot: string, outputPathRaw: string, sour
  * Optional ``output_path`` copies the newest built addon PBO to a file or folder (same semantics as mission build).
  */
 export async function handleBuildHEMTTProject(
-  _ctx: Launchpad,
+  ctx: Launchpad,
   _event: IpcMainInvokeEvent,
   args: unknown,
 ): Promise<BuildModProjectHemttResponse> {
+  const hemttCommand = readHemttSpawnCommand(ctx.settingsFile);
   const body = (args ?? {}) as BuildModProjectHemttPayload;
   const projectRaw = readStringField(body, 'project_path', 'projectPath');
   if (!projectRaw) {
@@ -163,7 +165,7 @@ export async function handleBuildHEMTTProject(
 
   let exitCode = 1;
   try {
-    exitCode = await runHemttBuild(projectResolved, logLines);
+    exitCode = await runHemttBuild(projectResolved, logLines, hemttCommand);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === 'HEMTT') {
@@ -171,7 +173,10 @@ export async function handleBuildHEMTTProject(
         ok: false,
         code: 'hemtt_missing',
         log: logLines,
-        error: 'HEMTT is not installed or not on PATH (`hemtt` command not found).',
+        error:
+          hemttCommand === 'hemtt'
+            ? 'HEMTT was not found. Install it from the HEMTT site or set the program location in Settings.'
+            : 'HEMTT could not be started. Check the program path in Settings.',
       };
     }
     return {

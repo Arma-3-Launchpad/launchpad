@@ -37,6 +37,7 @@ const EMPTY_SETTINGS_BASELINE: LaunchpadSettings = {
   remote_servers: [],
   logs_remote_default_server_id: '',
   logs_remote_default_folder: '/home/steam/arma3',
+  hemtt_path: '',
 }
 
 function sameSettings(a: LaunchpadSettings, b: LaunchpadSettings) {
@@ -60,6 +61,7 @@ function sameSettings(a: LaunchpadSettings, b: LaunchpadSettings) {
     a.github_new_repo_visibility === b.github_new_repo_visibility &&
     a.logs_remote_default_server_id === b.logs_remote_default_server_id &&
     a.logs_remote_default_folder === b.logs_remote_default_folder &&
+    a.hemtt_path === b.hemtt_path &&
     JSON.stringify(normServers(a.remote_servers)) === JSON.stringify(normServers(b.remote_servers))
   )
 }
@@ -83,6 +85,7 @@ export function SettingsPage() {
   const [remoteServers, setRemoteServers] = useState<RemoteServerSettingsEntry[]>([])
   const [remoteDefaultServerId, setRemoteDefaultServerId] = useState('')
   const [remoteDefaultFolder, setRemoteDefaultFolder] = useState('/home/steam/arma3')
+  const [hemttPath, setHemttPath] = useState('')
   const [serverDialogOpen, setServerDialogOpen] = useState(false)
   const [serverDialogMode, setServerDialogMode] = useState<'new' | 'edit'>('new')
   const [serverDialogId, setServerDialogId] = useState('')
@@ -101,6 +104,10 @@ export function SettingsPage() {
   const [updateBusy, setUpdateBusy] = useState(false)
   const [installBusy, setInstallBusy] = useState(false)
   const [updateResult, setUpdateResult] = useState<CheckUpdatesResult | null>(null)
+  const [detectBusy, setDetectBusy] = useState(false)
+  const [detectMsg, setDetectMsg] = useState<string | null>(null)
+  const [hemttInstallBusy, setHemttInstallBusy] = useState(false)
+  const [hemttInstallMsg, setHemttInstallMsg] = useState<string | null>(null)
 
   const draft: LaunchpadSettings = {
     arma3_path: trimField(arma3Path),
@@ -113,9 +120,24 @@ export function SettingsPage() {
     remote_servers: remoteServers,
     logs_remote_default_server_id: trimField(remoteDefaultServerId),
     logs_remote_default_folder: trimField(remoteDefaultFolder) || '/home/steam/arma3',
+    hemtt_path: trimField(hemttPath),
   }
 
   const dirty = !sameSettings(draft, saved ?? EMPTY_SETTINGS_BASELINE)
+
+  const hydrateFromSettings = useCallback((s: LaunchpadSettings) => {
+    setSaved(s)
+    setArma3Path(s.arma3_path ?? '')
+    setToolsPath(s.arma3_tools_path ?? '')
+    setProfilePath(s.arma3_profile_path ?? '')
+    setAppdataPath(s.arma3_appdata_path ?? '')
+    setDefaultAuthor(s.default_author ?? '')
+    setGithubVisibility(s.github_new_repo_visibility === 'public' ? 'public' : 'private')
+    setRemoteServers(Array.isArray(s.remote_servers) ? s.remote_servers : [])
+    setRemoteDefaultServerId(s.logs_remote_default_server_id ?? '')
+    setRemoteDefaultFolder(s.logs_remote_default_folder ?? '/home/steam/arma3')
+    setHemttPath(s.hemtt_path ?? '')
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,24 +145,14 @@ export function SettingsPage() {
     setSaveOk(false)
     try {
       const s = await fetchSettings()
-      setSaved(s)
-      setArma3Path(s.arma3_path ?? '')
-      setArma3WorkshopPath(s.arma3_workshop_path ?? '')
-      setToolsPath(s.arma3_tools_path ?? '')
-      setProfilePath(s.arma3_profile_path ?? '')
-      setAppdataPath(s.arma3_appdata_path ?? '')
-      setDefaultAuthor(s.default_author ?? '')
-      setGithubVisibility(s.github_new_repo_visibility === 'public' ? 'public' : 'private')
-      setRemoteServers(Array.isArray(s.remote_servers) ? s.remote_servers : [])
-      setRemoteDefaultServerId(s.logs_remote_default_server_id ?? '')
-      setRemoteDefaultFolder(s.logs_remote_default_folder ?? '/home/steam/arma3')
+      hydrateFromSettings(s)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Failed to load settings')
       setSaved(null)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [hydrateFromSettings])
 
   useEffect(() => {
     void load()
@@ -162,6 +174,7 @@ export function SettingsPage() {
         remote_servers: remoteServers,
         logs_remote_default_server_id: trimField(remoteDefaultServerId),
         logs_remote_default_folder: trimField(remoteDefaultFolder) || '/home/steam/arma3',
+        hemtt_path: trimField(hemttPath),
       })
       if ('error' in res && res.error) {
         setSaveError(res.error)
@@ -171,28 +184,8 @@ export function SettingsPage() {
         setSaveError('Save failed')
         return
       }
-      setSaved({
-        arma3_path: res.arma3_path ?? '',
-        arma3_workshop_path: res.arma3_workshop_path ?? '',
-        arma3_tools_path: res.arma3_tools_path ?? '',
-        arma3_profile_path: res.arma3_profile_path ?? '',
-        arma3_appdata_path: res.arma3_appdata_path ?? '',
-        default_author: res.default_author ?? '',
-        github_new_repo_visibility: res.github_new_repo_visibility === 'public' ? 'public' : 'private',
-        remote_servers: Array.isArray(res.remote_servers) ? res.remote_servers : [],
-        logs_remote_default_server_id: res.logs_remote_default_server_id ?? '',
-        logs_remote_default_folder: res.logs_remote_default_folder ?? '/home/steam/arma3',
-      })
-      setArma3Path(res.arma3_path ?? '')
-      setArma3WorkshopPath(res.arma3_workshop_path ?? '')
-      setToolsPath(res.arma3_tools_path ?? '')
-      setProfilePath(res.arma3_profile_path ?? '')
-      setAppdataPath(res.arma3_appdata_path ?? '')
-      setDefaultAuthor(res.default_author ?? '')
-      setGithubVisibility(res.github_new_repo_visibility === 'public' ? 'public' : 'private')
-      setRemoteServers(Array.isArray(res.remote_servers) ? res.remote_servers : [])
-      setRemoteDefaultServerId(res.logs_remote_default_server_id ?? '')
-      setRemoteDefaultFolder(res.logs_remote_default_folder ?? '/home/steam/arma3')
+      const { ok: _savedOk, ...nextSettings } = res
+      hydrateFromSettings(nextSettings)
       setSaveOk(true)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Save failed')
@@ -223,6 +216,116 @@ export function SettingsPage() {
     const ipc = getElectronIpc()
     if (!ipc || !updateResult || updateResult.ok !== true) return
     await ipc.invoke('openExternalUrl', updateResult.releasesUrl)
+  }
+
+  async function openHemttUrl(url: string) {
+    const ipc = getElectronIpc()
+    if (ipc) {
+      await ipc.invoke('openExternalUrl', url)
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  async function onInstallHemttWinget() {
+    const ipc = getElectronIpc()
+    if (!ipc) {
+      setHemttInstallMsg('Use the desktop app to run the installer from here.')
+      return
+    }
+    setHemttInstallBusy(true)
+    setHemttInstallMsg(null)
+    try {
+      const raw = (await ipc.invoke('install-hemtt-winget')) as {
+        ok?: boolean
+        error?: string
+        unsupported?: boolean
+      }
+      if (raw.unsupported) {
+        setHemttInstallMsg('Use the installation steps link for your system.')
+        return
+      }
+      if (raw.ok) {
+        setHemttInstallMsg(
+          'HEMTT is ready or already installed. Restart this app if mod builds still cannot find it.',
+        )
+        return
+      }
+      setHemttInstallMsg(raw.error ?? 'Install did not complete.')
+    } catch {
+      setHemttInstallMsg('Something went wrong.')
+    } finally {
+      setHemttInstallBusy(false)
+    }
+  }
+
+  async function onDetectArmaPaths() {
+    setDetectMsg(null)
+    const ipc = getElectronIpc()
+    if (!ipc) {
+      setDetectMsg('Use the desktop app to find folders automatically.')
+      return
+    }
+    setDetectBusy(true)
+    try {
+      const raw = (await ipc.invoke('detect-arma-paths')) as {
+        ok?: boolean
+        paths?: {
+          arma3_path?: string
+          arma3_tools_path?: string
+          arma3_profile_path?: string
+          arma3_appdata_path?: string
+        }
+      }
+      if (!raw.ok || !raw.paths) {
+        setDetectMsg('Something went wrong. Try again or pick folders above.')
+        return
+      }
+      const p = raw.paths
+      const detectedArma3 = trimField(p.arma3_path)
+      const detectedTools = trimField(p.arma3_tools_path)
+      const detectedProfile = trimField(p.arma3_profile_path)
+      const detectedAppdata = trimField(p.arma3_appdata_path)
+      let applied = 0
+      if (detectedArma3) applied += 1
+      if (detectedTools) applied += 1
+      if (detectedProfile) applied += 1
+      if (detectedAppdata) applied += 1
+      setSaveOk(false)
+      if (applied === 0) {
+        setDetectMsg('No install found. Pick folders above.')
+        return
+      }
+      setSaveError(null)
+      const saveRes = await updateSettings({
+        arma3_path: detectedArma3 || trimField(arma3Path),
+        arma3_tools_path: detectedTools || trimField(toolsPath),
+        arma3_profile_path: detectedProfile || trimField(profilePath),
+        arma3_appdata_path: detectedAppdata || trimField(appdataPath),
+        default_author: trimField(defaultAuthor),
+        github_new_repo_visibility: githubVisibility,
+        remote_servers: remoteServers,
+        logs_remote_default_server_id: trimField(remoteDefaultServerId),
+        logs_remote_default_folder: trimField(remoteDefaultFolder) || '/home/steam/arma3',
+        hemtt_path: trimField(hemttPath),
+      })
+      if ('error' in saveRes && saveRes.error) {
+        setDetectMsg(saveRes.error)
+        return
+      }
+      if (!saveRes.ok) {
+        setDetectMsg('Could not save. Try Save at the bottom of the page.')
+        return
+      }
+      const { ok: _savedOk, ...nextSettings } = saveRes
+      hydrateFromSettings(nextSettings)
+      setSaveOk(true)
+      setDetectMsg('Filled in paths we could find and saved them.')
+    } catch {
+      setDetectMsg('Something went wrong. Try again or pick folders above.')
+    } finally {
+      setDetectBusy(false)
+    }
   }
 
   async function onInstallUpdate() {
@@ -258,6 +361,7 @@ export function SettingsPage() {
     setRemoteServers(Array.isArray(saved.remote_servers) ? saved.remote_servers : [])
     setRemoteDefaultServerId(saved.logs_remote_default_server_id ?? '')
     setRemoteDefaultFolder(saved.logs_remote_default_folder ?? '/home/steam/arma3')
+    setHemttPath(saved.hemtt_path ?? '')
     setSaveError(null)
     setSaveOk(false)
   }
@@ -340,6 +444,11 @@ export function SettingsPage() {
     setRemoteDefaultServerId((cur) => (cur === id ? '' : cur))
     setSaveOk(false)
   }
+
+  const isWindows =
+    typeof navigator !== 'undefined' &&
+    (/Win/i.test(navigator.platform) || /Windows/i.test(navigator.userAgent))
+  const hemttDesktop = getElectronIpc() !== null
 
   return (
     <div className="page-stack">
@@ -516,6 +625,24 @@ export function SettingsPage() {
         <h2 id="paths-heading" className="card-title">
           Arma 3 paths
         </h2>
+        <p className="card-body">
+          Looks for a Steam install, Tools next to the game, your most likely profile, and the usual log folder.
+        </p>
+        <div className="form-actions">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => void onDetectArmaPaths()}
+            disabled={detectBusy || loading}
+          >
+            {detectBusy ? 'Searching…' : 'Find folders'}
+          </button>
+        </div>
+        {detectMsg ? (
+          <p className="card-body" role="status">
+            {detectMsg}
+          </p>
+        ) : null}
         {loading && <p className="card-body">Loading…</p>}
 
         {!loading && (
@@ -638,6 +765,66 @@ export function SettingsPage() {
               <span className="field-hint">
                 Used when you publish a mission from Managed Missions → GitHub (GitHub CLI). You can still override per
                 publish in that dialog.
+              </span>
+            </label>
+
+            <label className="field">
+              <span className="field-label">HEMTT program (optional)</span>
+              <span className="field-hint" style={{ display: 'block', marginBottom: 8 }}>
+                Used when you build or check mod projects.{' '}
+                <a href="https://hemtt.dev/#what-is-hemtt" target="_blank" rel="noopener noreferrer">
+                  What is HEMTT?
+                </a>
+              </span>
+              <div className="form-actions" style={{ flexWrap: 'wrap', marginBottom: 8 }}>
+                {hemttDesktop && isWindows ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void onInstallHemttWinget()}
+                    disabled={hemttInstallBusy}
+                  >
+                    {hemttInstallBusy ? 'Installing…' : 'Install with winget'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => void openHemttUrl('https://hemtt.dev/installation/')}
+                >
+                  Installation steps
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() =>
+                    void openHemttUrl('https://github.com/BrettMayson/HEMTT/releases/latest')
+                  }
+                >
+                  Downloads
+                </button>
+              </div>
+              {hemttInstallMsg ? (
+                <p className="card-body" role="status" style={{ marginTop: 0, marginBottom: 12 }}>
+                  {hemttInstallMsg}
+                </p>
+              ) : null}
+              <FileFolderInput
+                type="file"
+                commit="always"
+                name="hemtt_path"
+                autoComplete="off"
+                placeholder="Leave empty if the installer set up HEMTT for you"
+                inputClassName="field-input"
+                value={hemttPath}
+                onChange={(v) => {
+                  setHemttPath(v)
+                  setSaveOk(false)
+                }}
+              />
+              <span className="field-hint">
+                Leave empty unless the app cannot find HEMTT. Then choose the HEMTT program file (for example hemtt.exe on
+                Windows).
               </span>
             </label>
 

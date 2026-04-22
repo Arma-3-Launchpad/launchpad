@@ -1,12 +1,16 @@
-import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import type { OnMount } from '@monaco-editor/react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faFileCirclePlus, faPen } from '@fortawesome/free-solid-svg-icons'
 import { decodePaaFromPath, fetchMissionProjectTree, getP3dPreviewMeshFromPath, type ProjectTreeNode } from '../api/launchpad'
 import { ImagePreview } from './ImagePreview.tsx'
 import { P3dPreview } from './P3dPreview.tsx'
 import { Spinner } from './Spinner'
+import { ScriptEditorSearchPanel } from './Editor/ScriptEditorSearchPanel'
+import { ScriptEditorTabs, type OpenFileTab } from './Editor/ScriptEditorTabs'
+import { ScriptEditorGoTo } from './Editor/ScriptEditorGoTo'
+import { ScriptEditorToolbar } from './Editor/ScriptEditorToolbar'
+import { FileTree, fileBasename, parentDirRel, ancestorDirRelPathsForFile, firstFileRelDepthFirst, isPaaRel, isP3dRel } from './Editor/FileTree/FileTree'
+import { type InlineEditState } from './Editor/FileTree/FileTreeInlineEdit'
 import { useAppPreferences } from '../context/AppPreferencesContext'
 import {
   ensureMissionMonacoShiki,
@@ -14,6 +18,25 @@ import {
   missionResourceLanguage,
 } from '../missionMonacoSetup'
 import Util, { type HemttDiagnostic } from '../Util'
+
+const LS_SHOW_MINIMAP = 'launchpad.editorShowMinimap'
+const LS_SHOW_FOLDING = 'launchpad.editorShowFolding'
+
+function readStoredMinimap(): boolean {
+  try {
+    return localStorage.getItem(LS_SHOW_MINIMAP) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function readStoredFolding(): boolean {
+  try {
+    return localStorage.getItem(LS_SHOW_FOLDING) !== 'false'
+  } catch {
+    return true
+  }
+}
 
 function joinProjectPath(root: string, relPosix: string): string {
   const base = root.replace(/[/\\]+$/, '')
@@ -128,33 +151,6 @@ function applyHemttMarkers(
 
 export type ScriptEditorEnvironment = 'mission' | 'mod'
 
-function formatSize(n: number | null | undefined): string {
-  if (n == null) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function parentDirRel(relPosix: string): string {
-  const parts = relPosix.split('/').filter(Boolean)
-  if (parts.length <= 1) return ''
-  return parts.slice(0, -1).join('/')
-}
-
-function fileBasename(relPosix: string): string {
-  const parts = relPosix.split('/').filter(Boolean)
-  return parts.length ? parts[parts.length - 1]! : relPosix
-}
-
-function isPaaRel(relPosix: string): boolean {
-  return fileBasename(relPosix).toLowerCase().endsWith('.paa')
-}
-
-function isP3dRel(relPosix: string): boolean {
-  return fileBasename(relPosix).toLowerCase().endsWith('.p3d')
-}
-
-/** Single path segment only (no folders in the name field). */
 function sanitizeFileLabel(raw: string): string | null {
   const t = raw.trim()
   if (!t) return null
@@ -164,134 +160,33 @@ function sanitizeFileLabel(raw: string): string | null {
   return t
 }
 
-/** Depth-first: first file node in the same order as the tree UI. */
-function firstFileRelDepthFirst(node: ProjectTreeNode): string | null {
-  if (node.kind === 'file') return node.relPath || null
-  for (const ch of node.children ?? []) {
-    const hit = firstFileRelDepthFirst(ch)
-    if (hit) return hit
+const LS_SIDEBAR_W = 'launchpad.resourceSidebarWidth'
+const LS_PROBLEMS_H = 'launchpad.resourceProblemsHeight'
+const SIDEBAR_MIN = 200
+const EDITOR_MIN = 240
+const PROBLEMS_MIN = 80
+const PROBLEMS_MAX = 560
+
+function readStoredSidebarWidth(): number {
+  try {
+    const v = localStorage.getItem(LS_SIDEBAR_W)
+    if (v == null) return 300
+    const n = parseInt(v, 10)
+    return Number.isFinite(n) ? n : 300
+  } catch {
+    return 300
   }
-  return null
 }
 
-/** Directory ``relPath`` values that must be expanded to reveal a file at ``fileRel``. */
-function ancestorDirRelPathsForFile(fileRel: string): string[] {
-  const parts = fileRel.split('/').filter(Boolean)
-  if (parts.length <= 1) return ['']
-  const out: string[] = ['']
-  for (let i = 0; i < parts.length - 1; i++) {
-    out.push(parts.slice(0, i + 1).join('/'))
+function readStoredProblemsHeight(): number {
+  try {
+    const v = localStorage.getItem(LS_PROBLEMS_H)
+    if (v == null) return 200
+    const n = parseInt(v, 10)
+    return Number.isFinite(n) ? n : 200
+  } catch {
+    return 200
   }
-  return out
-}
-
-function TreeBranch({
-  node,
-  depth,
-  expanded,
-  toggle,
-  selectedRel,
-  busyFileRel,
-  onSelectFile,
-  disabled,
-  onRequestNewFile,
-  onRequestRename,
-}: {
-  node: ProjectTreeNode
-  depth: number
-  expanded: Set<string>
-  toggle: (rel: string) => void
-  selectedRel: string | null
-  /** When set, show a small spinner on that file row (e.g. while a texture preview is loading). */
-  busyFileRel: string | null
-  onSelectFile: (rel: string) => void
-  disabled?: boolean
-  onRequestNewFile: (dirRel: string) => void
-  onRequestRename: (fileRel: string) => void
-}) {
-  const isDir = node.kind === 'dir'
-  const rel = node.relPath
-  const open = isDir ? expanded.has(rel) : false
-
-  return (
-    <li
-      className={`mission-tree-item${isDir && open ? ' is-expanded' : ''}`}
-      style={{ paddingLeft: depth <= 2 ? depth * 8 : 16 + (depth - 2) * 2 }}
-    >
-      {isDir ? (
-        <div className="mission-tree-line">
-          <button
-            type="button"
-            className="mission-tree-row mission-tree-row-dir mission-tree-row-main"
-            onClick={() => toggle(rel)}
-            aria-expanded={open}
-          >
-            <span className="mission-tree-toggle" aria-hidden />
-            <span className="mission-tree-icon mission-tree-icon-folder" aria-hidden />
-            <span className="mission-tree-name">{node.name}</span>
-            {node.truncated ? <span className="mission-tree-meta">…</span> : null}
-          </button>
-          {!disabled ? (
-            <button
-              type="button"
-              className="mission-tree-row-tool btn btn-ghost btn-sm"
-              aria-label="Add file in this folder"
-              onClick={() => onRequestNewFile(rel)}
-            >
-              <FontAwesomeIcon icon={faFileCirclePlus} />
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="mission-tree-line">
-          <button
-            type="button"
-            className={`mission-tree-row mission-tree-row-file mission-tree-row-main${selectedRel === rel ? ' is-selected' : ''}`}
-            onClick={() => onSelectFile(rel)}
-          >
-            <span className="mission-tree-toggle mission-tree-toggle-spacer" aria-hidden />
-            <span className="mission-tree-icon mission-tree-icon-file" aria-hidden />
-            <span className="mission-tree-name">{node.name}</span>
-            {busyFileRel === rel ? (
-              <span className="mission-tree-busy" aria-hidden>
-                <Spinner size={14} color="var(--text-muted)" />
-              </span>
-            ) : null}
-            {node.size != null ? <span className="mission-tree-meta">{formatSize(node.size)}</span> : null}
-          </button>
-          {!disabled ? (
-            <button
-              type="button"
-              className="mission-tree-row-tool btn btn-ghost btn-sm"
-              aria-label="Rename this file"
-              onClick={() => onRequestRename(rel)}
-            >
-              <FontAwesomeIcon icon={faPen} />
-            </button>
-          ) : null}
-        </div>
-      )}
-      {isDir && open && node.children?.length ? (
-        <ul className="mission-tree-list mission-tree-nested">
-          {node.children.map((ch) => (
-            <TreeBranch
-              key={ch.relPath || ch.name}
-              node={ch}
-              depth={depth + 1}
-              expanded={expanded}
-              toggle={toggle}
-              selectedRel={selectedRel}
-              busyFileRel={busyFileRel}
-              onSelectFile={onSelectFile}
-              disabled={disabled}
-              onRequestNewFile={onRequestNewFile}
-              onRequestRename={onRequestRename}
-            />
-          ))}
-        </ul>
-      ) : null}
-    </li>
-  )
 }
 
 type Props = {
@@ -335,6 +230,9 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const lintDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lintSeqRef = useRef(0)
   const selectedRelRef = useRef<string | null>(null)
+  const fileContentRef = useRef('')
+  const dirtyRef = useRef(false)
+  const openFileBuffersRef = useRef(new Map<string, { text: string; dirty: boolean }>())
   const initialTreeSelectionDoneRef = useRef(false)
   const jumpTargetRef = useRef<{ rel: string; line: number; column?: number } | null>(null)
   const [jumpNonce, setJumpNonce] = useState(0)
@@ -346,6 +244,191 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const pathInputRef = useRef<HTMLInputElement>(null)
   const pathDialogTitleId = useId()
   const pathDialogFieldId = useId()
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const editorStackRef = useRef<HTMLDivElement>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth)
+  const [problemsHeight, setProblemsHeight] = useState(readStoredProblemsHeight)
+  const [wideLayout, setWideLayout] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 721px)').matches,
+  )
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false)
+  const [searchPanelReplaceMode, setSearchPanelReplaceMode] = useState(false)
+  const [goToOpen, setGoToOpen] = useState(false)
+  const [goToMode, setGoToMode] = useState<'line' | 'symbol'>('line')
+  const [searchPanelFocusTick, setSearchPanelFocusTick] = useState(0)
+  const [editorReadyTick, setEditorReadyTick] = useState(0)
+  const [showMinimap, setShowMinimap] = useState(readStoredMinimap)
+  const [showFolding, setShowFolding] = useState(readStoredFolding)
+  const searchPanelOpenRef = useRef(false)
+  const goToOpenRef = useRef(false)
+  const [inlineEditState, setInlineEditState] = useState<InlineEditState>(null)
+
+  useEffect(() => {
+    searchPanelOpenRef.current = searchPanelOpen
+  }, [searchPanelOpen])
+
+  useEffect(() => {
+    goToOpenRef.current = goToOpen
+  }, [goToOpen])
+
+  const getEditorShell = useCallback(() => monacoShellRef.current, [])
+
+  const readProjectFile = useCallback(
+    async (rel: string) => {
+      const abs = joinProjectPath(projectRoot, rel)
+      return Util.getFileContents(abs)
+    },
+    [projectRoot],
+  )
+
+  useEffect(() => {
+    setSearchPanelOpen(false)
+    setGoToOpen(false)
+  }, [selectedRel])
+
+  const openTabs = useMemo<OpenFileTab[]>(() => {
+    const tabs: OpenFileTab[] = []
+    openFileBuffersRef.current.forEach((buf, rel) => {
+      if (!isPaaRel(rel) && !isP3dRel(rel)) {
+        tabs.push({ rel, dirty: buf.dirty })
+      }
+    })
+    if (selectedRel && !isPaaRel(selectedRel) && !isP3dRel(selectedRel)) {
+      if (!tabs.some((t) => t.rel === selectedRel)) {
+        tabs.push({ rel: selectedRel, dirty })
+      } else {
+        const t = tabs.find((t) => t.rel === selectedRel)
+        if (t) t.dirty = dirty
+      }
+    }
+    return tabs
+  }, [selectedRel, dirty, fileContent])
+
+  const handleMinimapToggle = useCallback(() => {
+    setShowMinimap((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(LS_SHOW_MINIMAP, String(next))
+      } catch {}
+      return next
+    })
+  }, [])
+
+  const handleFoldingToggle = useCallback(() => {
+    setShowFolding((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(LS_SHOW_FOLDING, String(next))
+      } catch {}
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 721px)')
+    const fn = () => setWideLayout(mq.matches)
+    mq.addEventListener('change', fn)
+    return () => mq.removeEventListener('change', fn)
+  }, [])
+
+  useEffect(() => {
+    const clamp = () => {
+      const root = layoutRef.current
+      if (!root || !wideLayout) return
+      const rw = root.getBoundingClientRect().width
+      const maxW = Math.max(SIDEBAR_MIN, rw - EDITOR_MIN)
+      setSidebarWidth((w) => Math.max(SIDEBAR_MIN, Math.min(w, maxW)))
+    }
+    clamp()
+    window.addEventListener('resize', clamp)
+    return () => window.removeEventListener('resize', clamp)
+  }, [wideLayout])
+
+  useEffect(() => {
+    const clamp = () => {
+      const stack = editorStackRef.current
+      if (!stack || environment !== 'mod') return
+      const h = stack.getBoundingClientRect().height
+      const maxH = Math.max(PROBLEMS_MIN, h - 160)
+      setProblemsHeight((ph) => Math.max(PROBLEMS_MIN, Math.min(ph, maxH, PROBLEMS_MAX)))
+    }
+    const t = window.setTimeout(clamp, 0)
+    window.addEventListener('resize', clamp)
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener('resize', clamp)
+    }
+  }, [environment, selectedRel, wideLayout, monacoReady])
+
+  const onSidebarResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.button !== 0 || !wideLayout) return
+      e.preventDefault()
+      const startX = e.clientX
+      const startW = sidebarWidth
+      const drag = { lastW: startW }
+      const onMove = (ev: PointerEvent) => {
+        const root = layoutRef.current
+        if (!root) return
+        const rw = root.getBoundingClientRect().width
+        const maxW = Math.max(SIDEBAR_MIN, rw - EDITOR_MIN)
+        const delta = ev.clientX - startX
+        const next = Math.max(SIDEBAR_MIN, Math.min(startW + delta, maxW))
+        drag.lastW = next
+        setSidebarWidth(next)
+      }
+      const onUp = () => {
+        try {
+          localStorage.setItem(LS_SIDEBAR_W, String(drag.lastW))
+        } catch {
+          /* ignore */
+        }
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    },
+    [sidebarWidth, wideLayout],
+  )
+
+  const onProblemsResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.button !== 0 || environment !== 'mod') return
+      e.preventDefault()
+      const stack = editorStackRef.current
+      if (!stack) return
+      const startY = e.clientY
+      const startH = problemsHeight
+      const drag = { lastH: startH }
+      const onMove = (ev: PointerEvent) => {
+        const el = editorStackRef.current
+        if (!el) return
+        const sh = el.getBoundingClientRect().height
+        const maxH = Math.max(PROBLEMS_MIN, Math.min(sh - 160, PROBLEMS_MAX))
+        const delta = ev.clientY - startY
+        const next = Math.max(PROBLEMS_MIN, Math.min(startH + delta, maxH))
+        drag.lastH = next
+        setProblemsHeight(next)
+      }
+      const onUp = () => {
+        try {
+          localStorage.setItem(LS_PROBLEMS_H, String(drag.lastH))
+        } catch {
+          /* ignore */
+        }
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    },
+    [environment, problemsHeight],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -359,6 +442,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   const loadTree = useCallback(async () => {
     initialTreeSelectionDoneRef.current = false
+    openFileBuffersRef.current.clear()
     setTreeLoading(true)
     setTreeErr(null)
     setTree(null)
@@ -394,6 +478,8 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   }, [loadTree])
 
   selectedRelRef.current = selectedRel
+  fileContentRef.current = fileContent
+  dirtyRef.current = dirty
 
   const toggle = useCallback((rel: string) => {
     setExpanded((prev) => {
@@ -414,26 +500,93 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const beginNewFile = useCallback(
     (parentRel: string) => {
       if (disabled) return
-      setPathActionErr(null)
-      setPathDialog({ kind: 'new', parentRel })
-      setPathDialogInput('')
+      setExpanded((prev) => {
+        if (!parentRel) return prev
+        const next = new Set(prev)
+        next.add(parentRel)
+        return next
+      })
+      const newRel = parentRel ? `${parentRel}/__new__` : '__new__'
+      setInlineEditState({
+        rel: newRel,
+        kind: 'file',
+        mode: 'new-file',
+        initialValue: '',
+      })
     },
     [disabled],
   )
 
   const beginRenameFile = useCallback(
-    (fileRel: string) => {
+    (fileRel: string, currentName?: string) => {
       if (disabled) return
       if (dirty && selectedRelRef.current === fileRel) {
         setFileErr('Save your changes before renaming this file.')
         return
       }
-      setPathActionErr(null)
-      setPathDialog({ kind: 'rename', fileRel })
-      setPathDialogInput(fileBasename(fileRel))
+      const name = currentName ?? fileBasename(fileRel)
+      setInlineEditState({
+        rel: fileRel,
+        kind: 'file',
+        mode: 'rename',
+        initialValue: name,
+      })
     },
     [disabled, dirty],
   )
+
+  const [pendingOpenFile, setPendingOpenFile] = useState<string | null>(null)
+  
+  const handleInlineEditConfirm = useCallback(
+    async (rel: string, newName: string, mode: 'rename' | 'new-file' | 'new-folder') => {
+      if (!inlineEditState) return
+      setInlineEditState(null)
+
+      try {
+        if (mode === 'rename') {
+          const oldRel = rel
+          const parent = parentDirRel(oldRel)
+          const newRel = parent ? `${parent}/${newName}` : newName
+          if (newRel === oldRel) return
+
+          const fromAbs = joinProjectPath(projectRoot, oldRel)
+          const toAbs = joinProjectPath(projectRoot, newRel)
+          await Util.renameFile(fromAbs, toAbs)
+          await reloadTreeOnly()
+
+          const moved = openFileBuffersRef.current.get(oldRel)
+          if (moved) {
+            openFileBuffersRef.current.delete(oldRel)
+            openFileBuffersRef.current.set(newRel, moved)
+          }
+          if (selectedRelRef.current === oldRel) {
+            setSelectedRel(newRel)
+          }
+        } else if (mode === 'new-file') {
+          const parentRel = rel.replace('/__new__', '')
+          const newRel = parentRel ? `${parentRel}/${newName}` : newName
+          const abs = joinProjectPath(projectRoot, newRel)
+          await Util.createFile(abs, '')
+          await reloadTreeOnly()
+          setExpanded((prev) => {
+            const next = new Set(prev)
+            for (const d of ancestorDirRelPathsForFile(newRel)) {
+              next.add(d)
+            }
+            return next
+          })
+          setPendingOpenFile(newRel)
+        }
+      } catch (e) {
+        setFileErr(e instanceof Error ? e.message : 'Operation failed.')
+      }
+    },
+    [inlineEditState, projectRoot, reloadTreeOnly],
+  )
+
+  const handleInlineEditCancel = useCallback(() => {
+    setInlineEditState(null)
+  }, [])
 
   useEffect(() => {
     if (!pathDialog) return
@@ -475,6 +628,15 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
         }
         return
       }
+
+      const prevRel = selectedRelRef.current
+      if (prevRel && prevRel !== rel && !isPaaRel(prevRel) && !isP3dRel(prevRel)) {
+        openFileBuffersRef.current.set(prevRel, {
+          text: fileContentRef.current,
+          dirty: dirtyRef.current,
+        })
+      }
+
       if (focus?.line != null) {
         jumpTargetRef.current = { rel, line: focus.line, column: focus.column }
       } else {
@@ -495,6 +657,24 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
       }
       setLintDiagnostics([])
       setLintToolError(null)
+
+      const paa = isPaaRel(rel)
+      const p3d = isP3dRel(rel)
+
+      if (!paa && !p3d) {
+        const cached = openFileBuffersRef.current.get(rel)
+        if (cached) {
+          setSelectedRel(rel)
+          setFileErr(null)
+          setFileLoading(false)
+          setFileContent(cached.text)
+          setDirty(cached.dirty)
+          setTexturePreview(null)
+          setMeshPreview(null)
+          return
+        }
+      }
+
       setSelectedRel(rel)
       setFileErr(null)
       setFileLoading(true)
@@ -502,8 +682,6 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
       setTexturePreview(null)
       setMeshPreview(null)
       const abs = joinProjectPath(projectRoot, rel)
-      const paa = isPaaRel(rel)
-      const p3d = isP3dRel(rel)
       try {
         if (paa) {
           const r = await decodePaaFromPath(abs)
@@ -533,8 +711,10 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
             return
           }
         } else {
+          setFileContent('')
           const text = await Util.getFileContents(abs)
           setFileContent(text)
+          openFileBuffersRef.current.set(rel, { text, dirty: false })
         }
       } catch (e) {
         setFileContent('')
@@ -546,6 +726,36 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
       }
     },
     [projectRoot],
+  )
+
+  useEffect(() => {
+    if (pendingOpenFile) {
+      void openFile(pendingOpenFile)
+      setPendingOpenFile(null)
+    }
+  }, [pendingOpenFile, openFile])
+
+  const handleCloseTab = useCallback(
+    (rel: string) => {
+      const buf = openFileBuffersRef.current.get(rel)
+      if (buf?.dirty) {
+        return
+      }
+      openFileBuffersRef.current.delete(rel)
+      if (selectedRel === rel) {
+        const remaining = Array.from(openFileBuffersRef.current.keys()).filter(
+          (r) => !isPaaRel(r) && !isP3dRel(r),
+        )
+        if (remaining.length > 0) {
+          void openFile(remaining[remaining.length - 1])
+        } else {
+          setSelectedRel(null)
+          setFileContent('')
+          setDirty(false)
+        }
+      }
+    },
+    [selectedRel, openFile],
   )
 
   const confirmPathDialog = useCallback(async () => {
@@ -589,6 +799,11 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
       const toAbs = joinProjectPath(projectRoot, newRel)
       await Util.renameFile(fromAbs, toAbs)
       await reloadTreeOnly()
+      const moved = openFileBuffersRef.current.get(oldRel)
+      if (moved) {
+        openFileBuffersRef.current.delete(oldRel)
+        openFileBuffersRef.current.set(newRel, moved)
+      }
       if (selectedRelRef.current === oldRel) {
         setSelectedRel(newRel)
       }
@@ -629,6 +844,35 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   const onMonacoMount: OnMount = useCallback((editor, monaco) => {
     monacoShellRef.current = { editor, monaco }
+    setEditorReadyTick((n) => n + 1)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+      setGoToOpen(false)
+      setSearchPanelReplaceMode(false)
+      if (searchPanelOpenRef.current) {
+        setSearchPanelFocusTick((n) => n + 1)
+      } else {
+        setSearchPanelOpen(true)
+      }
+    })
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+      setGoToOpen(false)
+      setSearchPanelReplaceMode(true)
+      if (searchPanelOpenRef.current) {
+        setSearchPanelFocusTick((n) => n + 1)
+      } else {
+        setSearchPanelOpen(true)
+      }
+    })
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyG, () => {
+      setSearchPanelOpen(false)
+      setGoToMode('line')
+      setGoToOpen(true)
+    })
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyO, () => {
+      setSearchPanelOpen(false)
+      setGoToMode('symbol')
+      setGoToOpen(true)
+    })
   }, [])
 
   useEffect(() => {
@@ -646,6 +890,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
             const abs = joinProjectPath(projectRoot, selectedRel)
             await Util.setFileContents(abs, fileContent)
             setDirty(false)
+            openFileBuffersRef.current.set(selectedRel, { text: fileContent, dirty: false })
           }
           const res = await Util.lintModProjectHemtt(projectRoot)
           if (seq !== lintSeqRef.current) return
@@ -710,6 +955,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
     try {
       await Util.setFileContents(abs, fileContent)
       setDirty(false)
+      openFileBuffersRef.current.set(selectedRel, { text: fileContent, dirty: false })
     } catch (e) {
       setFileErr(e instanceof Error ? e.message : 'Could not save file')
     } finally {
@@ -747,8 +993,11 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   return (
     <div className="mission-resource-browser">
-      <div className="mission-resource-layout">
-        <aside className="mission-resource-sidebar">
+      <div className="mission-resource-layout" ref={layoutRef}>
+        <aside
+          className="mission-resource-sidebar"
+          style={wideLayout ? { flex: `0 0 ${sidebarWidth}px`, width: sidebarWidth } : undefined}
+        >
           <div className="mission-resource-sidebar-head">
             <span className="mission-resource-sidebar-title">Files</span>
             <div className="mission-resource-sidebar-tools">
@@ -826,30 +1075,49 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
             <p className="mission-resource-truncate-note">Large tree truncated for performance.</p>
           ) : null}
           <div className="mission-resource-tree-wrap">
-            <ul className="mission-tree-list mission-tree-root">
-              <TreeBranch
-                node={tree}
-                depth={0}
-                expanded={expanded}
-                toggle={toggle}
-                selectedRel={selectedRel}
-                busyFileRel={
-                  fileLoading && selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel))
-                    ? selectedRel
-                    : null
-                }
-                onSelectFile={(rel) => void openFile(rel)}
-                disabled={disabled}
-                onRequestNewFile={beginNewFile}
-                onRequestRename={beginRenameFile}
-              />
-            </ul>
+            <FileTree
+              tree={tree}
+              expanded={expanded}
+              selectedRel={selectedRel}
+              busyFileRel={
+                fileLoading && selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel))
+                  ? selectedRel
+                  : null
+              }
+              onToggle={toggle}
+              onSelectFile={(rel) => void openFile(rel)}
+              onRequestNewFile={beginNewFile}
+              onRequestRename={beginRenameFile}
+              disabled={disabled}
+              inlineEditState={inlineEditState}
+              onInlineEditConfirm={handleInlineEditConfirm}
+              onInlineEditCancel={handleInlineEditCancel}
+            />
           </div>
         </aside>
+        {wideLayout ? (
+          <button
+            type="button"
+            className="mission-resource-split mission-resource-split-v"
+            aria-orientation="vertical"
+            aria-label="Resize panels"
+            onPointerDown={onSidebarResizePointerDown}
+            style={{ touchAction: 'none' }}
+          />
+        ) : null}
         <section className="mission-resource-editor">
           <div className="mission-resource-editor-head">
             <h3 className="mission-resource-editor-title">Editor</h3>
           </div>
+          {openTabs.length > 0 && (
+            <ScriptEditorTabs
+              tabs={openTabs}
+              activeRel={selectedRel}
+              onSelectTab={(rel) => void openFile(rel)}
+              onCloseTab={handleCloseTab}
+              disabled={disabled}
+            />
+          )}
           {!selectedRel ? (
             <div className="mission-resource-placeholder">
               <p className="mission-resource-placeholder-title">Select a file</p>
@@ -859,56 +1127,75 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
             <div
               className={`mission-resource-editor-body${environment === 'mod' ? ' mission-resource-editor-body-mod' : ''}`}
             >
-              <div className="mission-resource-file-toolbar">
-                <code className="mission-resource-path">{selectedRel}</code>
-                <div className="mission-resource-file-toolbar-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    disabled={disabled || fileLoading}
-                    onClick={() => beginRenameFile(selectedRel)}
-                  >
-                    Rename
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={
-                      disabled ||
-                      savingFile ||
-                      fileLoading ||
-                      !dirty ||
-                      texturePreview != null ||
-                      meshPreview != null
-                    }
-                    onClick={() => void saveFile()}
-                  >
-                    {savingFile ? 'Saving…' : 'Save file'}
-                  </button>
-                </div>
-              </div>
+              <ScriptEditorToolbar
+                selectedRel={selectedRel}
+                dirty={dirty}
+                disabled={disabled}
+                fileLoading={fileLoading}
+                savingFile={savingFile}
+                showMinimap={showMinimap}
+                showFolding={showFolding}
+                onGoToLineClick={() => {
+                  setSearchPanelOpen(false)
+                  setGoToMode('line')
+                  setGoToOpen(true)
+                }}
+                onGoToSymbolClick={() => {
+                  setSearchPanelOpen(false)
+                  setGoToMode('symbol')
+                  setGoToOpen(true)
+                }}
+                onMinimapToggle={handleMinimapToggle}
+                onFoldingToggle={handleFoldingToggle}
+                onRenameClick={() => beginRenameFile(selectedRel, selectedRel ? fileBasename(selectedRel) : undefined)}
+                onSaveClick={() => void saveFile()}
+                isImageOrMesh={texturePreview != null || meshPreview != null}
+              />
               {fileErr ? (
                 <p className="form-banner form-banner-error mission-resource-file-err" role="alert">
                   {fileErr}
                 </p>
               ) : null}
-              {fileLoading ? (
+              <ScriptEditorSearchPanel
+                open={searchPanelOpen}
+                initialReplaceMode={searchPanelReplaceMode}
+                onOpenChange={setSearchPanelOpen}
+                getShell={getEditorShell}
+                documentText={fileContent}
+                editorReadyTick={editorReadyTick}
+                fileTree={tree}
+                readProjectFile={readProjectFile}
+                onOpenFile={(rel, focus) => void openFile(rel, focus)}
+                onDocumentChange={(newText) => {
+                  setFileContent(newText)
+                  setDirty(true)
+                }}
+                disabled={disabled}
+                focusTick={searchPanelFocusTick}
+              />
+              <ScriptEditorGoTo
+                open={goToOpen}
+                mode={goToMode}
+                onOpenChange={setGoToOpen}
+                getShell={getEditorShell}
+                documentText={fileContent}
+                disabled={disabled}
+              />
+              {fileLoading && selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel)) ? (
                 <div className="mission-resource-loading mission-resource-loading-inline">
                   <div className="mission-resource-loading-bar" />
-                  <p className="mission-resource-loading-text">
-                    {selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel))
-                      ? 'Loading preview…'
-                      : 'Loading file…'}
-                  </p>
+                  <p className="mission-resource-loading-text">Loading preview…</p>
                 </div>
               ) : selectedRel && isPaaRel(selectedRel) ? (
                 texturePreview ? (
                   <div className="mission-resource-editor-editor-stack mission-resource-editor-editor-stack--image">
-                    <ImagePreview
-                      width={texturePreview.width}
-                      height={texturePreview.height}
-                      rgba={texturePreview.data}
-                    />
+                    <div className="mission-resource-editor-stack-pane mission-resource-editor-stack-pane--grow">
+                      <ImagePreview
+                        width={texturePreview.width}
+                        height={texturePreview.height}
+                        rgba={texturePreview.data}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="mission-resource-placeholder mission-resource-preview-fallback">
@@ -920,14 +1207,16 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
               ) : selectedRel && isP3dRel(selectedRel) ? (
                 meshPreview ? (
                   <div className="mission-resource-editor-editor-stack mission-resource-editor-editor-stack--mesh">
-                    <P3dPreview
-                      positions={meshPreview.positions}
-                      indices={meshPreview.indices}
-                      normals={meshPreview.normals}
-                      uvs={meshPreview.uvs}
-                      textureNames={meshPreview.textureNames}
-                      modelDirectory={meshPreview.modelDirectory}
-                    />
+                    <div className="mission-resource-editor-stack-pane mission-resource-editor-stack-pane--grow">
+                      <P3dPreview
+                        positions={meshPreview.positions}
+                        indices={meshPreview.indices}
+                        normals={meshPreview.normals}
+                        uvs={meshPreview.uvs}
+                        textureNames={meshPreview.textureNames}
+                        modelDirectory={meshPreview.modelDirectory}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="mission-resource-placeholder mission-resource-preview-fallback">
@@ -942,32 +1231,65 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                   <p className="mission-resource-loading-text">Preparing editor…</p>
                 </div>
               ) : (
-                <div className="mission-resource-editor-editor-stack">
-                  <div className="mission-resource-monaco" role="textbox" aria-label="File contents" aria-multiline>
-                    <Editor
-                      height="100%"
-                      theme={missionMonacoTheme}
-                      language={editorLanguage}
-                      value={fileContent}
-                      onMount={onMonacoMount}
-                      onChange={(v) => {
-                        setFileContent(v ?? '')
-                        setDirty(true)
-                      }}
-                      options={{
-                        readOnly: Boolean(disabled),
-                        minimap: { enabled: false },
-                        fontSize: 12,
-                        fontFamily: 'var(--font-mono), ui-monospace, monospace',
-                        wordWrap: 'on',
-                        tabSize: 2,
-                        scrollBeyondLastLine: false,
-                        automaticLayout: true,
-                      }}
-                    />
+                <div
+                  className="mission-resource-editor-editor-stack"
+                  ref={environment === 'mod' ? editorStackRef : undefined}
+                >
+                  <div className="mission-resource-editor-stack-pane mission-resource-editor-stack-pane--grow">
+                    <div className="mission-resource-monaco" role="textbox" aria-label="File contents" aria-multiline>
+                      <Editor
+                        height="100%"
+                        theme={missionMonacoTheme}
+                        language={editorLanguage}
+                        value={fileContent}
+                        onMount={onMonacoMount}
+                        onChange={(v) => {
+                          setFileContent(v ?? '')
+                          setDirty(true)
+                        }}
+                        options={{
+                          readOnly:
+                            Boolean(disabled) ||
+                            Boolean(
+                              fileLoading &&
+                                selectedRel &&
+                                !isPaaRel(selectedRel) &&
+                                !isP3dRel(selectedRel),
+                            ),
+                          minimap: { enabled: showMinimap },
+                          folding: showFolding,
+                          foldingStrategy: 'indentation',
+                          showFoldingControls: showFolding ? 'always' : 'never',
+                          fontSize: 12,
+                          fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                          wordWrap: 'on',
+                          tabSize: 2,
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          find: { seedSearchStringFromSelection: 'never' },
+                          bracketPairColorization: { enabled: true },
+                          matchBrackets: 'always',
+                          autoClosingBrackets: 'always',
+                          autoClosingQuotes: 'always',
+                        }}
+                      />
+                    </div>
                   </div>
                   {environment === 'mod' ? (
-                    <aside className="mission-resource-problems" aria-label="Project check results">
+                    <>
+                      <button
+                        type="button"
+                        className="mission-resource-split mission-resource-split-h"
+                        aria-orientation="horizontal"
+                        aria-label="Resize panels"
+                        onPointerDown={onProblemsResizePointerDown}
+                        style={{ touchAction: 'none' }}
+                      />
+                      <aside
+                        className="mission-resource-problems mission-resource-problems--sized"
+                        aria-label="Project check results"
+                        style={{ flex: `0 0 ${problemsHeight}px` }}
+                      >
                       <div className="mission-resource-problems-head">
                         <span className="mission-resource-problems-title">Project check</span>
                         {lintRunning ? (
@@ -1058,7 +1380,8 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                           })}
                         </ul>
                       ) : null}
-                    </aside>
+                      </aside>
+                    </>
                   ) : null}
                 </div>
               )}

@@ -15,7 +15,7 @@ function modelBaselineJson(m: DescriptionExtModel): string {
     roots: m.roots,
   })
 }
-import { ScriptEditorModal } from './IntegratedScriptEditor'
+import { ScriptEditorModal } from './Editor/IntegratedScriptEditor'
 import Util from '../Util'
 
 export type MissionEditModalProps = {
