@@ -5,7 +5,6 @@ import {
   type ManagedScenario,
   type MissionLaunchMod,
 } from '../api/launchpad'
-import { pathForImportedHtmlMod } from '../mission/workshopModPath'
 import { extractGameTypeFromDescriptionExt, missionDescriptionExtPath } from '../mission/descriptionExt'
 import { MissionEditModal } from '../components/MissionEditModal'
 import { ScriptEditorModal } from '../components/Editor/IntegratedScriptEditor'
@@ -24,7 +23,6 @@ import {
   useMissionListPreferences,
   type MissionTableColumnId,
 } from '../components/MissionList'
-import '../components/MissionList/MissionList.less' // this is one of the best ways to keep styles sep
 
 type SortDir = 'asc' | 'desc'
 
@@ -197,7 +195,7 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
   }
 
   return (
-    <div className="mission-page">
+    <div className="mission-page relative z-[1] flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#ffffff] dark:bg-[#2b3036]">
       <ScriptEditorModal
         open={scriptEditor !== null}
         projectRoot={scriptEditor?.root ?? ''}
@@ -205,17 +203,6 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
         environment="mission"
         onClose={() => setScriptEditor(null)}
       />
-
-      {createOpen && (
-        <CreateMissionModal
-          onClose={() => setCreateOpen(false)}
-          onOpenSettings={onOpenSettings}
-          onCreated={(res) => {
-            setSaveInfo(`Mission created at ${res.mission_path ?? 'project folder'} (${res.mission_id ?? 'managed'}).`)
-            void load()
-          }}
-        />
-      )}
 
       {editMission && (
         <MissionEditModal
@@ -270,9 +257,9 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
         />
       )}
 
-      <header className="mission-page-header">
-        <div className="mission-page-title-row">
-          <h1 className="mission-page-title">Missions</h1>
+      <header className="flex shrink-0 flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3">
+          <h1 className="m-0 text-lg font-semibold text-[#1f2328] dark:text-[#f0f3f7]">Missions</h1>
           <MissionSearchBar
             value={searchQuery}
             onChange={setSearchQuery}
@@ -284,14 +271,16 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
             hasFilter={Boolean(searchQuery.trim())}
           />
         </div>
-        <div className="mission-page-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setCreateOpen(true)}
-          >
-            + New Mission
-          </button>
+        <div className="flex shrink-0 gap-2">
+          {!createOpen && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setCreateOpen(true)}
+            >
+              + New Mission
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-ghost"
@@ -304,24 +293,36 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
       </header>
 
       {loadError && (
-        <p className="form-banner form-banner-error mission-page-banner" role="alert">
+        <p
+          className="m-0 w-full rounded-none border-x-0 border-b border-t-0 border-[#cf222e]/25 bg-[rgba(207,34,46,0.08)] px-2.5 py-2 text-xs text-[#1f2328] dark:border-[#ff7b72]/25 dark:bg-[rgba(255,123,114,0.12)] dark:text-[#f0f3f7]"
+          role="alert"
+        >
           {loadError}
         </p>
       )}
       {saveInfo && !editMission && (
-        <p className="form-banner form-banner-success mission-page-banner" role="status">
+        <p
+          className="m-0 w-full rounded-none border-x-0 border border-b border-t-0 border-[#1a7f37]/28 bg-[rgba(26,127,55,0.12)] px-2.5 py-2 text-xs text-[#1f2328] dark:text-[#f0f3f7]"
+          role="status"
+        >
           {saveInfo}
         </p>
       )}
 
-      {loading && <p className="mission-page-empty">Loading…</p>}
+      {loading && (
+        <p className="m-0 px-5 py-10 text-center text-sm text-[#5c646f] dark:text-[#9aa4b2]">Loading…</p>
+      )}
 
       {!loading && scenarios.length === 0 && !loadError && (
-        <p className="mission-page-empty">No managed missions yet.</p>
+        <p className="m-0 px-5 py-10 text-center text-sm text-[#5c646f] dark:text-[#9aa4b2]">
+          No managed missions yet.
+        </p>
       )}
 
       {!loading && scenarios.length > 0 && sortedScenarios.length === 0 && (
-        <p className="mission-page-empty">No missions match "{searchQuery}"</p>
+        <p className="m-0 px-5 py-10 text-center text-sm text-[#5c646f] dark:text-[#9aa4b2]">
+          No missions match &quot;{searchQuery}&quot;
+        </p>
       )}
 
       {!loading && sortedScenarios.length > 0 && (
@@ -343,6 +344,17 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
           onPbo={setPboMission}
           onGithub={setGithubMission}
           onScriptEditor={(root, title) => setScriptEditor({ root, title })}
+        />
+      )}
+
+      {createOpen && (
+        <CreateMissionModal
+          onClose={() => setCreateOpen(false)}
+          onOpenSettings={onOpenSettings}
+          onCreated={(res) => {
+            setSaveInfo(`Mission created at ${res.mission_path ?? 'project folder'} (${res.mission_id ?? 'managed'}).`)
+            void load()
+          }}
         />
       )}
     </div>
