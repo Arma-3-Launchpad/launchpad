@@ -26,6 +26,24 @@
   --radius: 6px;
   --radius-lg: 10px;
   --focus: 0 0 0 3px rgba(9, 105, 218, 0.35);
+  --text-body: var(--text);
+  --text-primary: var(--text);
+  --error: var(--danger);
+  --radius-sm: 4px;
+  --warning: #9a6700;
+  --fg: var(--text);
+  --fg-muted: var(--text-muted);
+  --bg-elevated: var(--bg-surface);
+  --file-icon-folder: #e8a838;
+  --file-icon-script: #4fc3f7;
+  --file-icon-image: #81c784;
+  --file-icon-model: #ba68c8;
+  --file-icon-config: #ffb74d;
+  --file-icon-description: #90a4ae;
+  --file-icon-audio: #f06292;
+  --file-icon-archive: #a1887f;
+  --file-icon-data: #7986cb;
+  --file-icon-generic: var(--text-muted);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,5 +66,6 @@
     --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.35);
     --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
     --focus: 0 0 0 3px rgba(88, 166, 255, 0.35);
+    --warning: #d4a72c;
   }
 }

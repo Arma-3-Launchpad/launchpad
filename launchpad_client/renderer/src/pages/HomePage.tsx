@@ -6,7 +6,7 @@ type Props = {
 export function HomePage({ onGoMission, onGoSettings }: Props) {
   return (
     <div className="mission-page relative z-[1] flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-surface">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto">
         <div className="page-stack px-5 py-4">
           <section className="card" aria-labelledby="home-step-settings">
             <h2 id="home-step-settings" className="card-title">

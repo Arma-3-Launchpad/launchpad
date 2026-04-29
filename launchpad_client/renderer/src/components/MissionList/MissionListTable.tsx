@@ -199,7 +199,7 @@ export function MissionListTable({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-auto">
         <table className="w-full table-fixed border-collapse text-[13px]">
           <colgroup>
             {DEFAULT_COLUMN_ORDER.map((id) => (

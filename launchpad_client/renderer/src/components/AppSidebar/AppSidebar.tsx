@@ -27,18 +27,20 @@ export function AppSidebar({ active, onSelect, collapsed = false, onToggleCollap
         <SidebarFooter active={active} onSelect={onSelect} collapsed={collapsed} />
       </aside>
       {onToggleCollapse && (
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="absolute left-[calc(100%+6px)] top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-border-strong opacity-0 transition-[opacity,color,transform] duration-300 ease-out hover:scale-110 hover:text-accent group-hover/sidebar:opacity-100 max-[840px]:hidden"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand (⌘B)' : 'Collapse (⌘B)'}
-        >
-          <FontAwesomeIcon 
-            icon={collapsed ? faChevronRight : faChevronLeft} 
-            className="h-3 w-3 transition-transform duration-200" 
-          />
-        </button>
+        <div className="group/edge absolute right-0 top-0 z-20 h-full w-8 max-[840px]:hidden">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="absolute left-[calc(100%+6px)] top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-border-strong opacity-0 transition-[opacity,color,transform] duration-300 ease-out hover:scale-110 hover:text-accent group-hover/edge:opacity-100"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand (⌘B)' : 'Collapse (⌘B)'}
+          >
+            <FontAwesomeIcon 
+              icon={collapsed ? faChevronRight : faChevronLeft} 
+              className="h-3 w-3 transition-transform duration-200" 
+            />
+          </button>
+        </div>
       )}
     </div>
   )

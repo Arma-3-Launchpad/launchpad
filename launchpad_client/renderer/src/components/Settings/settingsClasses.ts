@@ -4,7 +4,7 @@ export const settings = {
   stack:
     'flex w-full min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden px-5 py-4 text-left',
   tabPanel:
-    'min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-14 pt-1 [scrollbar-gutter:stable]',
+    'scrollbar-subtle min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-14 pt-1 [scrollbar-gutter:stable]',
   pageHeader: 'shrink-0 min-h-0 space-y-1 pb-4',
   pageTitle: 'm-0 text-lg font-semibold text-heading',
   pageLead: 'm-0 text-sm text-muted',

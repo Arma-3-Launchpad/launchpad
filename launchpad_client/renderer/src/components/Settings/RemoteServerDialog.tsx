@@ -81,7 +81,7 @@ export function RemoteServerDialog({
             <span aria-hidden>×</span>
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-5">
+        <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-4">
             <label className={settings.field}>
               <span className={settings.label}>Name</span>

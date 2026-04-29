@@ -7,7 +7,7 @@ const triggerClass =
   'flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border bg-subtle py-2 pl-3 pr-3 text-left text-sm text-foreground transition-[border-color,box-shadow] hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-accent/25'
 
 const panelBaseClass =
-  'absolute left-0 right-0 z-50 max-h-60 overflow-y-auto overflow-x-hidden rounded-md border border-border bg-surface shadow-md ring-1 ring-black/5 dark:bg-app dark:ring-white/10'
+  'scrollbar-subtle absolute left-0 right-0 z-50 max-h-60 overflow-y-auto overflow-x-hidden rounded-md border border-border bg-surface shadow-md ring-1 ring-black/5 dark:bg-app dark:ring-white/10'
 
 const optionClass =
   'm-0 cursor-pointer list-none px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-subtle'

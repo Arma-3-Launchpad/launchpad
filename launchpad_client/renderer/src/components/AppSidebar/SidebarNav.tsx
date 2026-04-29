@@ -12,7 +12,7 @@ type Props = {
 export function SidebarNav({ groups, active, onSelect, collapsed = false }: Props) {
   return (
     <nav
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-2 max-[840px]:min-h-0 max-[840px]:flex-1 max-[840px]:flex max-[840px]:flex-row max-[840px]:flex-wrap max-[840px]:items-center max-[840px]:gap-1 max-[840px]:overflow-visible max-[840px]:p-2"
+      className="scrollbar-subtle flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-2 max-[840px]:min-h-0 max-[840px]:flex-1 max-[840px]:flex max-[840px]:flex-row max-[840px]:flex-wrap max-[840px]:items-center max-[840px]:gap-1 max-[840px]:overflow-visible max-[840px]:p-2"
       aria-label="Sections"
     >
       {groups.map((group, groupIndex) => (

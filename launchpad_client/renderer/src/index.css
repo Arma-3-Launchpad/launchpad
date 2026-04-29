@@ -1,5 +1,6 @@
 @import "./globals.css";
 @import "tailwindcss";
+@import "./styles/legacy-chrome.css";
 
 @theme {
   --color-app: var(--bg-app);
@@ -9,14 +10,159 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-foreground: var(--text);
+  --color-body: var(--text-body);
   --color-muted: var(--text-muted);
   --color-heading: var(--text-heading);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-error: var(--error);
   --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: var(--radius-sm);
+  --font-mono: var(--font-mono);
 }
 
-.shell-content:has(.mission-page) {
+/* Monaco find decorations (class names set by the editor, not components) */
+.script-editor-search-hit {
+  background: rgba(255, 200, 0, 0.22);
+}
+.script-editor-search-hit-current {
+  background: rgba(230, 170, 0, 0.42);
+}
+
+.mission-resource-monaco .monaco-editor,
+.mission-resource-monaco .monaco-editor .overflow-guard {
+  max-width: 100%;
+}
+
+.script-editor-dialog--fullscreen.modal-dialog,
+.script-editor-dialog--fullscreen.mission-edit-dialog {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  min-width: 0 !important;
+  max-width: 100vw !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+}
+
+@keyframes mission-resource-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.mission-p3d-preview-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--fg-muted);
+  user-select: none;
+}
+
+.mission-p3d-preview-opt--grow {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.mission-p3d-preview-opt-label {
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.mission-p3d-preview-select {
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font: inherit;
+}
+
+.mission-p3d-preview-opt:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mission-image-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  overflow: auto;
+}
+
+.mission-image-preview > div.mission-p3d-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-size: 0.8125rem;
+}
+
+.mission-image-preview > div.mission-image-preview-frame {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-conic-gradient(#2a2a2e 0% 25%, #1e1e22 0% 50%) 50% / 16px 16px;
+}
+
+.mission-image-preview > div.mission-image-preview-frame.mission-p3d-preview-frame {
+  height: 100%;
+  background: transparent;
+}
+
+.mission-image-preview > div.mission-image-preview-frame.mission-p3d-preview-frame > div.mission-p3d-preview-canvas-wrap {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 280px;
+}
+
+.mission-image-preview:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+@media (prefers-color-scheme: light) {
+  .mission-image-preview-frame {
+    background: repeating-conic-gradient(#e8e8ec 0% 25%, #dddde2 0% 50%) 50% / 16px 16px;
+  }
+  .mission-p3d-preview-frame {
+    background: repeating-conic-gradient(rgba(232, 232, 236, 0.42) 0% 25%, rgba(221, 221, 226, 0.42) 0% 50%) 50% / 16px 16px;
+  }
+}
+
+.mission-image-preview-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.shell-content:has(.mission-page),
+.shell-content:has(.testing-page),
+.shell-content:has(.debugging-page) {
   padding: 0;
   overflow: hidden;
 }
@@ -90,6 +236,17 @@ button:disabled {
   }
 }
 
+@keyframes mission-context-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .create-mission-panel {
   opacity: 0;
   transform: translateX(24px);
@@ -102,3 +259,35 @@ button:disabled {
 code {
   font-family: var(--font-mono);
 }
+
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-subtle:hover {
+  scrollbar-color: color-mix(in srgb, var(--border) 42%, transparent) transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.scrollbar-subtle:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--border-strong) 58%, transparent);
+}
+

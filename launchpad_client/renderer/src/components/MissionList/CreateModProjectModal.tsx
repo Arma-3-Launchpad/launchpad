@@ -78,7 +78,7 @@ export function CreateModProjectModal({ onClose, onCreated }: CreateModProjectMo
         </h2>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-surface px-4 py-4 sm:px-5 sm:py-5">
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-surface px-4 py-4 sm:px-5 sm:py-5">
         <form
           className="flex min-h-0 flex-1 flex-col gap-4"
           onSubmit={handleSubmit}

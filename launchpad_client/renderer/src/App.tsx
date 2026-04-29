@@ -11,8 +11,6 @@ import { SettingsPage } from './pages/SettingsPage'
 import { TestingPage } from './pages/Testing'
 import { LoggingPage } from './pages/Logging'
 import { DebuggingPage } from './pages/Debugging'
-import './App.less'
-
 type MenuEventPayload = { event?: string }
 
 export default function App() {
@@ -55,7 +53,7 @@ export default function App() {
           onToggleCollapse={toggleSidebar}
         />
         <div className="shell-main">
-          <main className="shell-content" id="main">
+          <main className="shell-content scrollbar-subtle" id="main">
             {settingsKeepAlive ? (
               <div
                 className="h-full min-h-0 w-full min-w-0 overflow-hidden"

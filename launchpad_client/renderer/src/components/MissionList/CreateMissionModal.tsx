@@ -47,7 +47,7 @@ export function CreateMissionModal({ onClose, onOpenSettings, onCreated }: Creat
         </h2>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-surface px-4 py-4 sm:px-5 sm:py-5">
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-surface px-4 py-4 sm:px-5 sm:py-5">
         <MissionBuildPage
           embedded
           onGoSettings={onOpenSettings}

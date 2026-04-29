@@ -12,7 +12,7 @@ export function SidebarTooltip({ label, hint, children, disabled }: Props) {
   const [visible, setVisible] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLElement>(null)
-  const timeoutRef = useRef<number>()
+  const timeoutRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     return () => {
@@ -39,16 +39,17 @@ export function SidebarTooltip({ label, hint, children, disabled }: Props) {
     setVisible(false)
   }
 
+  const childProps = isValidElement(children) ? (children.props as { onMouseEnter?: (e: React.MouseEvent) => void; onMouseLeave?: (e: React.MouseEvent) => void }) : null
   const child = isValidElement(children)
     ? cloneElement(children, {
         ref: triggerRef,
         onMouseEnter: (e: React.MouseEvent) => {
           show()
-          children.props.onMouseEnter?.(e)
+          childProps?.onMouseEnter?.(e)
         },
         onMouseLeave: (e: React.MouseEvent) => {
           hide()
-          children.props.onMouseLeave?.(e)
+          childProps?.onMouseLeave?.(e)
         },
       } as Record<string, unknown>)
     : children

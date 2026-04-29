@@ -5,7 +5,7 @@ import {
   type ManagedScenario,
   type MissionLaunchMod,
 } from '../../api/launchpad'
-import Util from '../../Util'
+import Util from '../../utils'
 import { fullMissionName, missionModRowKey } from './missionUtils'
 
 type ModsProfileModalProps = {
